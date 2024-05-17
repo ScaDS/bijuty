@@ -7,7 +7,7 @@ This project provides a simple Python module containing tools to setup environme
 You can install the module using pip inside jupyter hub cell:
 
 ```sh
-pip install git+https://gitlab.hrz.tu-chemnitz.de/apku868a--tu-dresden.de/jupyter-python-kernel.git@main
+!pip install git+https://gitlab.hrz.tu-chemnitz.de/apku868a--tu-dresden.de/big-data-environment-setup-for-jupyterhub@main
 ```
 Output can be as follows:
 ![install](./images/install.png)
