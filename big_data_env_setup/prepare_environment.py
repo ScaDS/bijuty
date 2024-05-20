@@ -79,12 +79,14 @@ def prepare_environment(fw_name,conf_dest="default",conf_template="default"):
         logger.info(f"  Spark master url     - spark://{master_host}:{master_port}")
         print("")
         print("")
-        logger.info(f"  To access, spark GUI, type following in your terminal -")
-        logger.info(f"      ssh login1.{cluster_name} -L 4040:{master_host}:4040 -L 8080:{master_host}:8080 -L 8081:{master_host}:8081")
+        logger.info(f"Once the cluster is started, one can access the spark GUI in browser using port forwarding.")
+        logger.info(f"To access, spark GUI, type following in your terminal -")
+        user=os.environ['USER']
+        logger.info(f"  ssh {os.environ['USER']}@login1.{cluster_name} -L 4040:{master_host}:4040 -L 8080:{master_host}:8080 -L 8081:{master_host}:8081")
         print("")
-        logger.info(f"  Once the port is forwarded, one can access the GUI, by accessing")
-        logger.info(f"      - localhost:4040")
-        logger.info(f"      - localhost:8080")
-        logger.info(f"      - localhost:8081")
+        logger.info(f"Once the port is forwarded, one can access the GUI, by accessing")
+        logger.info(f"  - localhost:4040")
+        logger.info(f"  - localhost:8080")
+        logger.info(f"  - localhost:8081")
 
 # End of the file
