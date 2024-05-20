@@ -69,9 +69,11 @@ def prepare_environment(fw_name,conf_dest="default",conf_template="default"):
     
     # TODO
     logger.info(f"  Cluster master           - {master_host}")
-    workers_host = run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST | sed '1d'")
+    workers_host = run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST")
     logger.info(f"  Cluster worker           - {workers_host}")
     logger.info(f"  Cluster master port      - {master_port}")
-    #logger.info(f"  Master url               - {}")
+    
+    if fw_name == "spark":
+        logger.info(f"  Spark master url     - spark://{master_host}:{master_port}")
 
 # End of the file
