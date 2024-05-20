@@ -42,7 +42,7 @@ def prepare_environment(fw_name,conf_dest="default",conf_template="default"):
     job_digit = job_id[-3:] # Extract last three characters
     master_port=int(job_digit) + 7077
     os.environ[f"{fw_name_upper}_MASTER_PORT"]=f"{master_port}"
-
+      
     # Initializing configuration
     logger.info("Initializing configuration from template.")
     fw_conf_opt=f"--framework {fw_name_lower} --template {conf_template} --destination {conf_dest}"
@@ -58,11 +58,20 @@ def prepare_environment(fw_name,conf_dest="default",conf_template="default"):
     conf_dest_full=f"{conf_dest}/{fw_name_lower}"
     os.environ[f"{fw_name_upper}_CONF_DIR"] = conf_dest_full # Configuration is initialized inside spark directory
 
+    master_host = run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST | head -1")
     # Add information to spark-env.sh
     if fw_name == "spark":
         with open(f"{conf_dest_full}/spark-env.sh", "a") as f:
             f.write(f"export LD_LIBRARY_PATH={run_bash_cmd('echo $LD_LIBRARY_PATH')}\n")
             f.write(f"export {fw_name_upper}_MASTER_PORT={master_port}\n")
+            f.write(f"export SPARK_MASTER_HOST={master_host}\n")
             f.close()
+    
+    # TODO
+    logger.info(f"  Cluster master           - {master_host}")
+    workers_host = run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST | sed '1d'")
+    logger.info(f"  Cluster worker           - {workers_host}")
+    logger.info(f"  Cluster master port      - {master_port}")
+    #logger.info(f"  Master url               - {}")
 
 # End of the file
