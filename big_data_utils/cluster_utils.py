@@ -1,5 +1,5 @@
 import os
-from .my_utils import run_bash_cmd, SimpleLogger
+from .utils import run_bash_cmd, SimpleLogger
 
 logger = SimpleLogger()
 

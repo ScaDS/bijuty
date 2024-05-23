@@ -1,7 +1,7 @@
 import os
 import sys
 import shutil
-from .my_utils import SimpleLogger, run_bash_cmd
+from .utils import SimpleLogger, run_bash_cmd
 
 def configure_env(fw_name,conf_dest="default",conf_template="default"):
     logger = SimpleLogger()
