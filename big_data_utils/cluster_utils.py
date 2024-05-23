@@ -1,6 +1,8 @@
 import os
 from .my_utils import run_bash_cmd, SimpleLogger
 
+logger = SimpleLogger()
+
 class ClusterService:
     def __init__(self, fw_name):
         self.fw_name = fw_name.upper()
