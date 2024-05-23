@@ -34,4 +34,4 @@ class ClusterService:
         
         for lines in mylines:
             words = lines.split(" ",1)
-            logger.info(f"\t{words[0]}, {words[1:]}")
+            logger.info(f"\t{words[0]}, {words[1]}")
