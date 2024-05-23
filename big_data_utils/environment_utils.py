@@ -3,7 +3,7 @@ import sys
 import shutil
 from .my_utils import SimpleLogger, run_bash_cmd
 
-def prepare_environment(fw_name,conf_dest="default",conf_template="default"):
+def configure_env(fw_name,conf_dest="default",conf_template="default"):
     logger = SimpleLogger()
     
     # Defining user defined variables
@@ -66,7 +66,9 @@ def prepare_environment(fw_name,conf_dest="default",conf_template="default"):
             f.write(f"export {fw_name_upper}_MASTER_PORT={master_port}\n")
             f.write(f"export SPARK_MASTER_HOST={master_host}\n")
             f.close()
-    
+        
+        run_bash_cmd(f"sed 's!\(spark://\)[a-zA-Z0-9]*:[0-9]*!\1{master_host}:{master_port}!' {conf_dest_full}/spark-submit")
+
     # TODO
     logger.info(f"  Cluster master           - {master_host}")
     workers_host = run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST")

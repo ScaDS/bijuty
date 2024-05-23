@@ -16,26 +16,26 @@ Output can be as follows:
 
 Here's an example of how to use the module inside jupyter notebook:
 ```python
-from big_data_env_setup.prepare_environment import prepare_environment
+from big_data_utils.environment_utils import configure_env
 
 # Using default:
 #   - configuration template
 #   - configuration initialization destination
-prepare_environment(fw_name="spark")
+configure_env(fw_name="spark")
 
 # Using default:
 #   - configuration template
-prepare_environment(fw_name="spark", conf_dest="./conf")
+configure_env(fw_name="spark", conf_dest="./conf")
 
 # Using default:
 #   - configuration initialization destination
-prepare_environment(fw_name="spark", conf_template="/path/to/template")
+configure_env(fw_name="spark", conf_template="/path/to/template")
 
 # If all fields are used
-prepare_environment(fw_name="spark", conf_dest="./conf", conf_template="/path/to/template")
+configure_env(fw_name="spark", conf_dest="./conf", conf_template="/path/to/template")
 ```
 Output is as follows for one of the use case:
-![prepare_environment](./images/prepare_environment.png)
+![configure_env](./images/configure_env.png)
 
 Once the environment is setup and configuration is initialized, big data cluster can be started. For spark it can be done in jupyter notebook as shown below:
 ![start_spark_cluster](./images/start_spark_cluster.png)
