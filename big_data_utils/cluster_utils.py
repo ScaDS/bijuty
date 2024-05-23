@@ -1,3 +1,4 @@
+import os
 from .my_utils import run_bash_cmd, SimpleLogger
 
 class ClusterService:
