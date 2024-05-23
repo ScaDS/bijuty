@@ -30,7 +30,8 @@ def configure_env(fw_name,conf_dest="default",conf_template="default"):
     logger.info(f"  Config. destination loc. - {conf_dest}")
     if fw_name == "spark":
         spark_home=os.environ["SPARK_HOME"]
-    
+        logger.info(f"  Logging directory        - {conf_dest}/log")
+
     os.environ[f"MY_{fw_name_upper}_CONF_DEST"]=conf_dest
     os.environ[f"MY_{fw_name_upper}_CONF_TEMPLATE"]=conf_template
     
