@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="big_data_env_utils",
+    name="big_data_utils",
     version="0.1.0",
     packages=find_packages(),
     install_requires=[], # TODO
