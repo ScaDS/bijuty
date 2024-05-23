@@ -67,7 +67,7 @@ def configure_env(fw_name,conf_dest="default",conf_template="default"):
             f.write(f"export SPARK_MASTER_HOST={master_host}\n")
             f.close()
         
-        run_bash_cmd(f"sed 's!\(spark://\)[a-zA-Z0-9]*:[0-9]*!\1{master_host}:{master_port}!' {conf_dest_full}/spark-submit")
+        run_bash_cmd(f"sed -i 's!\(spark://\)[a-zA-Z0-9]*:[0-9]*!\1{master_host}:{master_port}!' {conf_dest_full}/spark-submit")
 
     # TODO
     logger.info(f"  Cluster master           - {master_host}")
