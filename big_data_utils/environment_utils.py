@@ -20,17 +20,21 @@ class ClusterConfig:
             self.cluster_name = "localhost"
 
     def running_on_hpc(self):
-        test=run_bash_cmd("hostname -f | cut -d'.' -f2-").strip()
+        test=run_bash_cmd("hostname -f | cut -d'.' -f3-").strip()
         return test == "hpc.tu-dresden.de"
 
     def configure_env(self, conf_dest="default",conf_template="default"):
+       
+        self.conf_dest = conf_dest
+        self.conf_template = conf_template
+
         # Defining user defined variables
         fw_name_upper = self.fw_name.upper()
         fw_name_lower = self.fw_name.lower()
         
         if self.is_hpc:
             # Option handling
-            if conf_dest == "default":
+            if self.conf_dest == "default":
                 self.conf_dest = os.path.abspath(f"{os.environ['HOME']}/cluster-conf-{os.environ['SLURM_JOBID']}")
             
             if os.path.isdir(self.conf_dest):
@@ -39,7 +43,7 @@ class ClusterConfig:
             else:
                 os.mkdir(self.conf_dest) 
             
-            if conf_template == "default":
+            if self.conf_template == "default":
                 self.conf_template = os.environ[f"{fw_name_upper}_CONF_TEMPLATE"]
             self.conf_template = os.path.abspath(self.conf_template)
         
@@ -94,8 +98,7 @@ class ClusterConfig:
 
                 # Replace port in custom spark-submit command
                 run_bash_cmd(f"sed -i 's!\(spark://\)[a-zA-Z0-9]*:[0-9]*!\1{self.master_host}:{self.master_port}!' {conf_dest_full}/spark-submit")
-    
-    
+ 
             if fw_name_upper == "SPARK":
                 logger.info(f"  Spark master url     - spark://{self.master_host}:{self.master_port}")
                 print("")
@@ -110,7 +113,7 @@ class ClusterConfig:
                 logger.info(f"\t- localhost:8080")
                 logger.info(f"\t- localhost:8081")
                 print("")
-    
+             
    
     def get_worker_hosts(self):
         return self.worker_hosts
