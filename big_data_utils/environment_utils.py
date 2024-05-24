@@ -12,7 +12,6 @@ class ClusterConfig:
     
     def __init__(self, fw_name):
         self.fw_name = fw_name.upper()
-        self.fw_conf_dir = os.environ[f"{self.fw_name}_CONF_DIR"]
         
         self.is_hpc = running_on_hpc()
         if self.is_hpc:
@@ -41,18 +40,18 @@ class ClusterConfig:
                 os.mkdir(self.conf_dest) 
             
             if conf_template == "default":
-                conf_template = os.environ[f"{fw_name_upper}_CONF_TEMPLATE"]
-            conf_template = os.path.abspath(conf_template)
+                self.conf_template = os.environ[f"{fw_name_upper}_CONF_TEMPLATE"]
+            self.conf_template = os.path.abspath(self.conf_template)
         
             logger.info("Preparing environment setup as follows:")
             logger.info(f"  Framework                - {fw_name_upper}")
-            logger.info(f"  Config. template         - {conf_template}")
+            logger.info(f"  Config. template         - {self.conf_template}")
             logger.info(f"  Config. destination dir. - {self.conf_dest}")
             if fw_name_upper == "SPARK":
                 logger.info(f"  Logging directory        - {self.conf_dest}/log")
     
-            os.environ[f"MY_{fw_name_upper}_CONF_DEST"]=conf_dest
-            os.environ[f"MY_{fw_name_upper}_CONF_TEMPLATE"]=conf_template
+            os.environ[f"MY_{fw_name_upper}_CONF_DEST"]=self.conf_dest
+            os.environ[f"MY_{fw_name_upper}_CONF_TEMPLATE"]=self.conf_template
             
             if fw_name_upper == "SPARK":
                 os.environ['PYSPARK_PYTHON'] = sys.executable
@@ -60,7 +59,7 @@ class ClusterConfig:
              
             # Initializing configuration
             logger.info("Initializing configuration from template.")
-            fw_conf_opt=f"--framework {fw_name_lower} --template {conf_template} --destination {self.conf_dest}"
+            fw_conf_opt=f"--framework {fw_name_lower} --template {self.conf_template} --destination {self.conf_dest}"
             fw_conf_cmd=f"source framework-configure.sh {fw_conf_opt}"
             output = run_bash_cmd(f"{fw_conf_cmd}; env | grep {fw_name_upper}")
             
