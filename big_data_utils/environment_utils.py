@@ -13,17 +13,17 @@ class ClusterConfig:
     def __init__(self, fw_name):
         self.fw_name = fw_name.upper()
         
-        self.is_hpc = running_on_hpc()
+        self.is_hpc = self.running_on_hpc()
         if self.is_hpc:
             self.cluster_name = run_bash_cmd("hostname -f | cut -d'.' -f2-")
         else:
             self.cluster_name = "localhost"
 
-    def running_on_hpc():
+    def running_on_hpc(self):
         test=run_bash_cmd("hostname -f | cut -d'.' -f2-").strip()
         return test == "hpc.tu-dresden.de"
 
-    def configure_env(conf_dest="default",conf_template="default"):
+    def configure_env(self, conf_dest="default",conf_template="default"):
         # Defining user defined variables
         fw_name_upper = self.fw_name.upper()
         fw_name_lower = self.fw_name.lower()
@@ -112,13 +112,13 @@ class ClusterConfig:
                 print("")
     
    
-    def get_worker_hosts():
+    def get_worker_hosts(self):
         return self.worker_hosts
 
-    def get_master_host():
+    def get_master_host(self):
         return self.master_host
 
-    def get_master_port():
+    def get_master_port(self):
         return self.master_port
 
 
