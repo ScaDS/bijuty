@@ -28,7 +28,7 @@ class ClusterConfig:
         fw_name_upper = self.fw_name.upper()
         fw_name_lower = self.fw_name.lower()
         
-        if is_hpc:
+        if self.is_hpc:
             # Option handling
             if conf_dest == "default":
                 self.conf_dest = os.path.abspath(f"{os.environ['HOME']}/cluster-conf-{os.environ['SLURM_JOBID']}")
