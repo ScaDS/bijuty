@@ -88,8 +88,15 @@ def configure_env(fw_name,conf_dest="default",conf_template="default"):
         logger.info(f"  ssh {os.environ['USER']}@login1.{cluster_name} -L 4040:{master_host}:4040 -L 8080:{master_host}:8080 -L 8081:{master_host}:8081")
         print("")
         logger.info(f"Once the port is forwarded, one can access the GUI, by accessing")
-        logger.info(f"  - localhost:4040")
-        logger.info(f"  - localhost:8080")
-        logger.info(f"  - localhost:8081")
+        logger.info(f"\t- localhost:4040")
+        logger.info(f"\t- localhost:8080")
+        logger.info(f"\t- localhost:8081")
+        print("")
 
-# End of the file
+    return {
+        'master_host': master_host,
+        'master_port': master_port,
+        'workers_host': workers_host
+        }
+
+# Enn of the file
