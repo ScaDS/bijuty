@@ -59,8 +59,7 @@ class ClusterConfig:
             
             if fw_name_upper == "SPARK":
                 os.environ['PYSPARK_PYTHON'] = sys.executable
-       
-             
+                    
             # Initializing configuration
             logger.info("Initializing configuration from template.")
             fw_conf_opt=f"--framework {fw_name_lower} --template {self.conf_template} --destination {self.conf_dest}"
@@ -81,9 +80,11 @@ class ClusterConfig:
             job_digit = job_id[-3:] # Extract last three characters
             self.master_port=int(job_digit) + 7077
             os.environ[f"{fw_name_upper}_MASTER_PORT"]=f"{self.master_port}"
-            
-            self.master_host = run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST | head -1")
-            self.worker_hosts = run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST")
+           
+            slurm_node_list = get_slurm_nodelist()
+ 
+            self.master_host = slurm_node_list[0]
+            self.worker_hosts = slurm_node_list
             
             logger.info(f"  Master (host:port)  - {self.master_host}:{self.master_port}")
             logger.info(f"  Worker (host)       - {self.worker_hosts}")
@@ -113,8 +114,21 @@ class ClusterConfig:
                 logger.info(f"\t- localhost:8080")
                 logger.info(f"\t- localhost:8081")
                 print("")
-             
-   
+  
+    # Modify worker file
+    def set_workers(self,worker_list):
+        if f"{self.fw_name}_CONF_DIR" in os.environ:
+            if self.fw_name == "SPARK":
+                worker_file = f"{os.environ['SPARK_CONF_DIR']}/workers"
+
+            with open(worker_file, "w") as file:
+                for worker_i in worker_list:
+                    file.write(worker_i + "\n")
+        else:
+            logger.error("The configuration is not initialized yet.")
+            logger.error("Please inititalize configuration using:  ") 
+            logger.error("<your-config-class-variable>.configure_env(...)")
+
     def get_worker_hosts(self):
         return self.worker_hosts
 
@@ -123,6 +137,9 @@ class ClusterConfig:
 
     def get_master_port(self):
         return self.master_port
+
+def get_slurm_nodelist():
+    return run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST").split("\n")
 
 
 # Enn of the file

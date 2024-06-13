@@ -1,4 +1,5 @@
 import os
+import time
 from .utils import run_bash_cmd, SimpleLogger
 
 logger = SimpleLogger()
@@ -18,14 +19,17 @@ class ClusterService:
         if self.fw_name=='SPARK':
             run_bash_cmd(f"nohup start-all.sh > {self.cluster_log} 2>&1")
     
+        time.sleep(3)
         logger.info(f"Logging cluster startup info at: {self.cluster_log}")
-
+    
     def stop_cluster(self):
         logger.info(f"Stopping {self.fw_name} cluster.")
         
         if self.fw_name=='SPARK':
             run_bash_cmd(f"nohup stop-all.sh >> {self.cluster_log} 2>&1")
-            logger.info(f"Logging cluster stopping info at: {self.cluster_log}")
+        
+        time.sleep(3)
+        logger.info(f"Logging cluster stopping info at: {self.cluster_log}")
 
     def check_status(self):
         logger.info("Currently, following java processes are running:")
