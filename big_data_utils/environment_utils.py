@@ -2,7 +2,7 @@ import os
 import sys
 import shutil
 from .utils import SimpleLogger, run_bash_cmd
-import textwrap
+import subprocess
 
 logger = SimpleLogger()
 
@@ -45,7 +45,16 @@ class ClusterConfig:
             
             if os.path.isdir(self.conf_dest):
                 logger.info(f"Removing existing configuration directory: '{self.conf_dest}'")
-                shutil.rmtree(self.conf_dest)
+                try:
+                    shutil.rmtree(self.conf_dest)
+                except Exception as e:
+                    logger.error(f"Error removing existing configuration directory: {e}")
+                    logger.info(f"Checking for running {self.fw_name} processes...")
+                    # Run the jps command to check for running Spark processes
+                    jps_output = subprocess.check_output(["jps"]).decode("utf-8")
+                    logger.error(jps_output)
+                    logger.error("Create a new cell. And kill the processes using command \"!kill <process_id>\"")
+                    raise Exception("Master and worker processes are already running")
             else:
                 logger.debug(f"Creating new configuration directory: '{self.conf_dest}'")
                 os.mkdir(self.conf_dest)
