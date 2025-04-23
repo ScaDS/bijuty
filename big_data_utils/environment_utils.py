@@ -52,19 +52,11 @@ class ClusterConfig:
                     logger.info(f"Checking for running {self.fw_name} processes...")
                     # Run the jps command to check for running Spark processes
                     jps_output = subprocess.check_output(["jps"]).decode("utf-8")
-                    # jps_output = [ line for line in jps_output if 'Jps' not in line ]
-                    # for i in jps_output:
-                    #     print(i)
-                    # Parse the output to get the process IDs
-                    process_ids = [line.split()[0] for line in jps_output.splitlines()[1:]]
-                    # Kill the processes
-                    for process_id in process_ids:
-                        try:
-                            subprocess.check_output(["kill", process_id])
-                        except:
-                            continue
-                    # Retry initializing the configuration
-                    self.configure_env(conf_dest=self.conf_dest,conf_template=self.conf_template,randomize_ports=self.randomize_ports)
+                    jps_output = [ line for line in jps_output if 'Jps' not in line ]
+                    for i in jps_output:
+                        print(i)
+                    logger.error("Create a new cell. And kill the processes using command \"!kill <process_id>\"")
+                    raise Exception("Master and worker processes are already running")
             else:
                 logger.debug(f"Creating new configuration directory: '{self.conf_dest}'")
                 os.mkdir(self.conf_dest)
