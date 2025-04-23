@@ -52,9 +52,7 @@ class ClusterConfig:
                     logger.info(f"Checking for running {self.fw_name} processes...")
                     # Run the jps command to check for running Spark processes
                     jps_output = subprocess.check_output(["jps"]).decode("utf-8")
-                    jps_output = [ line for line in jps_output if 'Jps' not in line ]
-                    for i in jps_output:
-                        print(i)
+                    logger.error(jps_output)
                     logger.error("Create a new cell. And kill the processes using command \"!kill <process_id>\"")
                     raise Exception("Master and worker processes are already running")
             else:
