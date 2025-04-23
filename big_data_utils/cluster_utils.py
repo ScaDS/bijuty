@@ -57,9 +57,9 @@ class ClusterService:
     def check_status(self):
         logger.info("Currently, following java processes are running:")
         mylines=run_bash_cmd("jps").split("\n")
-        logger.info(f"\tID, Name ")
-        
-        for lines in mylines:
+        java_processes = [line for line in mylines if line and not line.startswith('jps')]
+        logger.info(f"\tProcess ID, Name ")
+        for lines in java_processes:
             words = lines.split(" ",1)
             logger.info(f"\t{words[0]}, {words[1]}")
 
