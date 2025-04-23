@@ -120,6 +120,15 @@ class ClusterConfig:
             elif self.fw_name == "FLINK":
                 master_url_info = f""""""
             logger.info(f"{master_url_info}")
+        
+            if fw_name_upper == "SPARK":
+                logger.info(f"Once the cluster is started, one can access the spark GUI in browser using port forwarding.")
+                logger.info(f"To access, spark GUI, type following in your terminal on local machine:")
+                logger.info(f"{self.message_spacer}ssh {os.environ['USER']}@login1.{self.cluster_name} -L 4040:{self.master_host}:4040 -L 8080:{self.master_host}:8080 -L 8081:{self.master_host}:8081")
+                logger.info(f"Once the port is forwarded, one can access the GUI, by accessing")
+                logger.info(f"{self.message_spacer}• http://localhost:4040")
+                logger.info(f"{self.message_spacer}• http://localhost:8080")
+                logger.info(f"{self.message_spacer}• http://localhost:8081")
   
     # Modify worker file
     def set_workers(self,worker_list):
