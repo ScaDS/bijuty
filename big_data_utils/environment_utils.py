@@ -8,11 +8,16 @@ logger = SimpleLogger()
 # TODO
 # - logger message formatting
 
+
 class ClusterConfig:
-    
+
     def __init__(self, fw_name):
         self.fw_name = fw_name.upper()
-        
+
+        if self.fw_name not in ['FLINK', 'SPARK']:
+            raise Exception(
+                "Sorry, frameworks other than 'flink' and 'spark' is not supported.")
+
         self.is_hpc = self.running_on_hpc()
         if self.is_hpc:
             self.cluster_name = run_bash_cmd("hostname -f | cut -d'.' -f2-")
@@ -20,103 +25,116 @@ class ClusterConfig:
             self.cluster_name = "localhost"
 
     def running_on_hpc(self):
-        test=run_bash_cmd("hostname -f | cut -d'.' -f3-").strip()
+        test = run_bash_cmd("hostname -f | cut -d'.' -f3-").strip()
         return test == "hpc.tu-dresden.de"
 
-    def configure_env(self, conf_dest="default",conf_template="default"):
-       
+    def configure_env(self, conf_dest="default", conf_template="default"):
+
         self.conf_dest = conf_dest
         self.conf_template = conf_template
 
         # Defining user defined variables
         fw_name_upper = self.fw_name.upper()
         fw_name_lower = self.fw_name.lower()
-        
+
         if self.is_hpc:
             # Option handling
             if self.conf_dest == "default":
-                self.conf_dest = os.path.abspath(f"{os.environ['HOME']}/cluster-conf-{os.environ['SLURM_JOBID']}")
-            
+                self.conf_dest = os.path.abspath(
+                    f"{os.environ['HOME']}/cluster-conf-{os.environ['SLURM_JOBID']}")
+
             if os.path.isdir(self.conf_dest):
-                logger.info(f"Deleting and recreating directory \"{self.conf_dest}\".")
+                logger.info(
+                    f"Deleting and recreating directory \"{self.conf_dest}\".")
                 shutil.rmtree(self.conf_dest)
             else:
-                os.mkdir(self.conf_dest) 
-            
+                os.mkdir(self.conf_dest)
+
             if self.conf_template == "default":
                 self.conf_template = os.environ[f"{fw_name_upper}_CONF_TEMPLATE"]
             self.conf_template = os.path.abspath(self.conf_template)
-        
+
             logger.info("Preparing environment setup as follows:")
             logger.info(f"  Framework                - {fw_name_upper}")
             logger.info(f"  Config. template         - {self.conf_template}")
             logger.info(f"  Config. destination dir. - {self.conf_dest}")
             if fw_name_upper == "SPARK":
-                logger.info(f"  Logging directory        - {self.conf_dest}/log")
-    
-            os.environ[f"MY_{fw_name_upper}_CONF_DEST"]=self.conf_dest
-            os.environ[f"MY_{fw_name_upper}_CONF_TEMPLATE"]=self.conf_template
-            
+                logger.info(
+                    f"  Logging directory        - {self.conf_dest}/log")
+
+            os.environ[f"MY_{fw_name_upper}_CONF_DEST"] = self.conf_dest
+            os.environ[f"MY_{fw_name_upper}_CONF_TEMPLATE"] = self.conf_template
+
             if fw_name_upper == "SPARK":
                 os.environ['PYSPARK_PYTHON'] = sys.executable
-                    
+
             # Initializing configuration
             logger.info("Initializing configuration from template.")
-            fw_conf_opt=f"--framework {fw_name_lower} --template {self.conf_template} --destination {self.conf_dest}"
-            fw_conf_cmd=f"source framework-configure.sh {fw_conf_opt}"
+            fw_conf_opt = f"--framework {fw_name_lower} --template {self.conf_template} --destination {self.conf_dest}"
+            fw_conf_cmd = f"source framework-configure.sh {fw_conf_opt}"
             output = run_bash_cmd(f"{fw_conf_cmd}; env | grep {fw_name_upper}")
-            
+
             # Set the environment variable in Python script's environment
             for line in output.strip().split("\n"):
                 if '=' in line:
-                    key, value = line.strip().split('=',1)    
+                    key, value = line.strip().split('=', 1)
                     os.environ[key] = value
-    
-            conf_dest_full=f"{self.conf_dest}/{fw_name_lower}"
-            os.environ[f"{fw_name_upper}_CONF_DIR"] = conf_dest_full # Configuration is initialized inside spark directory
-            
+
+            conf_dest_full = f"{self.conf_dest}/{fw_name_lower}"
+            # Configuration is initialized inside spark directory
+            os.environ[f"{fw_name_upper}_CONF_DIR"] = conf_dest_full
+
             # Get SLURM_JOBID to create random port number
             job_id = run_bash_cmd("echo $SLURM_JOBID")
-            job_digit = job_id[-3:] # Extract last three characters
-            self.master_port=int(job_digit) + 7077
-            os.environ[f"{fw_name_upper}_MASTER_PORT"]=f"{self.master_port}"
-           
+            job_digit = job_id[-3:]  # Extract last three characters
+            self.master_port = int(job_digit) + 7077
+            os.environ[f"{fw_name_upper}_MASTER_PORT"] = f"{self.master_port}"
+
             slurm_node_list = get_slurm_nodelist()
- 
+
             self.master_host = slurm_node_list[0]
             self.worker_hosts = slurm_node_list
-            
-            logger.info(f"  Master (host:port)  - {self.master_host}:{self.master_port}")
+
+            logger.info(
+                f"  Master (host:port)  - {self.master_host}:{self.master_port}")
             logger.info(f"  Worker (host)       - {self.worker_hosts}")
-            
+
             # Add information to spark-env.sh
             if fw_name_upper == "SPARK":
                 with open(f"{conf_dest_full}/spark-env.sh", "a") as f:
-                    f.write(f"export LD_LIBRARY_PATH={run_bash_cmd('echo $LD_LIBRARY_PATH')}\n")
-                    f.write(f"export {fw_name_upper}_MASTER_PORT={self.master_port}\n")
+                    f.write(
+                        f"export LD_LIBRARY_PATH={run_bash_cmd('echo $LD_LIBRARY_PATH')}\n")
+                    f.write(
+                        f"export {fw_name_upper}_MASTER_PORT={self.master_port}\n")
                     f.write(f"export SPARK_MASTER_HOST={self.master_host}\n")
                     f.close()
 
                 # Replace port in custom spark-submit command
-                run_bash_cmd(f"sed -i 's!\(spark://\)[a-zA-Z0-9]*:[0-9]*!\1{self.master_host}:{self.master_port}!' {conf_dest_full}/spark-submit")
- 
+                run_bash_cmd(
+                    f"sed -i 's!\(spark://\)[a-zA-Z0-9]*:[0-9]*!\1{self.master_host}:{self.master_port}!' {conf_dest_full}/spark-submit")
+
             if fw_name_upper == "SPARK":
-                logger.info(f"  Spark master url     - spark://{self.master_host}:{self.master_port}")
+                logger.info(
+                    f"  Spark master url     - spark://{self.master_host}:{self.master_port}")
                 print("")
                 print("")
-                logger.info(f"Once the cluster is started, one can access the spark GUI in browser using port forwarding.")
-                logger.info(f"To access, spark GUI, type following in your terminal -")
-                user=os.environ['USER']
-                logger.info(f"  ssh {os.environ['USER']}@login1.{self.cluster_name} -L 4040:{self.master_host}:4040 -L 8080:{self.master_host}:8080 -L 8081:{self.master_host}:8081")
+                logger.info(
+                    f"Once the cluster is started, one can access the spark GUI in browser using port forwarding.")
+                logger.info(
+                    f"To access, spark GUI, type following in your terminal -")
+                user = os.environ['USER']
+                logger.info(
+                    f"  ssh {os.environ['USER']}@login1.{self.cluster_name} -L 4040:{self.master_host}:4040 -L 8080:{self.master_host}:8080 -L 8081:{self.master_host}:8081")
                 print("")
-                logger.info(f"Once the port is forwarded, one can access the GUI, by accessing")
+                logger.info(
+                    f"Once the port is forwarded, one can access the GUI, by accessing")
                 logger.info(f"\t- localhost:4040")
                 logger.info(f"\t- localhost:8080")
                 logger.info(f"\t- localhost:8081")
                 print("")
-  
+
     # Modify worker file
-    def set_workers(self,worker_list):
+    def set_workers(self, worker_list):
         if f"{self.fw_name}_CONF_DIR" in os.environ:
             if self.fw_name == "SPARK":
                 worker_file = f"{os.environ['SPARK_CONF_DIR']}/workers"
@@ -126,7 +144,7 @@ class ClusterConfig:
                     file.write(worker_i + "\n")
         else:
             logger.error("The configuration is not initialized yet.")
-            logger.error("Please inititalize configuration using:  ") 
+            logger.error("Please inititalize configuration using:  ")
             logger.error("<your-config-class-variable>.configure_env(...)")
 
     def get_worker_hosts(self):
@@ -137,6 +155,7 @@ class ClusterConfig:
 
     def get_master_port(self):
         return self.master_port
+
 
 def get_slurm_nodelist():
     return run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST").split("\n")
