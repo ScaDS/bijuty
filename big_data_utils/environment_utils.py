@@ -56,7 +56,7 @@ class ClusterConfig:
                     logger.error("Create a new cell. And kill the processes using command \"!kill <process_id>\"")
                     raise Exception("Master and worker processes are already running")
             else:
-                logger.debug(f"Creating new configuration directory: '{self.conf_dest}'")
+                logger.info(f"Creating new configuration directory: '{self.conf_dest}'")
                 os.mkdir(self.conf_dest)
             
             if self.conf_template == "default":
