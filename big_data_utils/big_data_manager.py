@@ -3,50 +3,53 @@ import sys
 import shutil
 from .utils import SimpleLogger, run_bash_cmd
 import subprocess
+import socket
+from .slurm_utils import SlurmManager
+import time
 
 logger = SimpleLogger()
+
 
 # TODO
 # - logger message formatting
 
-class ClusterConfig:
+class BigDataManager:
     
-    def __init__(self, fw_name):
+    def __init__(self, fw_name, debug_set_slurm_true=False):
         self.fw_name = fw_name.upper()
-        self.message_spacer = ' '*2
-        
         if self.fw_name not in [ 'FLINK', 'SPARK']:
             raise Exception("Sorry, frameworks other than 'flink' and 'spark' is not supported.")
-    
-        self.is_hpc = self.running_on_hpc()
-        if self.is_hpc:
-            self.cluster_name = run_bash_cmd("hostname -f | cut -d'.' -f2-")
-        else:
-            self.cluster_name = "localhost"
+        
+        self.slurm = SlurmManager()
+        if debug_set_slurm_true:
+            self.slurm.in_slurm_job = debug_set_slurm_true
+        
+        self.cluster_name = socket.getfqdn().strip()
+                
+        self.message_spacer = ' '*2
 
-    def running_on_hpc(self):
-        test=run_bash_cmd("hostname -f | cut -d'.' -f3-").strip()
-        return test == "hpc.tu-dresden.de"
+    def __repr__(self):
+        s = f"framework={self.fw_name}\n"
+        # s = s + f"hpc_domain_match_str={self.cluster_name}\n"
+        s = s + f"is_hpc={self.slurm.in_slurm_job}\n"
+        s = s + f"primary_hostname={self.cluster_name}"
+        return s
 
-    def configure_env(self, conf_dest="default",conf_template="default",randomize_ports=False):
-       
+    # Setup configuration from template or from default values
+    def setup_config(self, conf_dest=None,conf_template=None,randomize_ports=False):
         self.conf_dest = conf_dest
         self.conf_template = conf_template
         self.randomize_ports = randomize_ports
         
-        # Defining user defined variables
-        fw_name_upper = self.fw_name.upper()
-        fw_name_lower = self.fw_name.lower()
-        
-        if self.is_hpc:
-            # Option handling
-            if self.conf_dest == "default":
-                self.conf_dest = os.path.abspath(f"{os.environ['HOME']}/cluster-conf-{os.environ['SLURM_JOBID']}")
+        if self.slurm.in_slurm_job:
+            if not self.conf_dest:
+                # self.conf_dest = os.path.abspath(f"{os.environ['HOME']}/cluster-conf-{os.environ['SLURM_JOBID']}")
+                self.conf_dest = os.path.abspath(f"./cluster-conf-{os.environ['SLURM_JOBID']}")
             
             if os.path.isdir(self.conf_dest):
                 logger.info(f"Removing existing configuration directory: '{self.conf_dest}'")
                 try:
-                    shutil.rmtree(self.conf_dest)
+                    shutil.move(self.conf_dest,f"{self.conf_dest}_old_{time.time_ns()}")
                 except Exception as e:
                     logger.error(f"Error removing existing configuration directory: {e}")
                     logger.info(f"Checking for running {self.fw_name} processes...")
@@ -59,29 +62,29 @@ class ClusterConfig:
                 logger.debug(f"Creating new configuration directory: '{self.conf_dest}'")
                 os.mkdir(self.conf_dest)
             
-            if self.conf_template == "default":
-                self.conf_template = os.environ[f"{fw_name_upper}_CONF_TEMPLATE"]
+            if self.conf_template == None:
+                self.conf_template = os.environ[f"{self.fw_name}_CONF_TEMPLATE"]
             self.conf_template = os.path.abspath(self.conf_template)
         
             logger.info("Environment configuration initialized:")
-            logger.info(f"{self.message_spacer}• Framework:        {fw_name_upper}")
+            logger.info(f"{self.message_spacer}• Framework:        {self.fw_name}")
             logger.info(f"{self.message_spacer}• Config template:  {self.conf_template}")
             logger.info(f"{self.message_spacer}• Config target:    {self.conf_dest}")
             
-            if fw_name_upper == "SPARK":
+            if self.fw_name == "SPARK":
                 logger.info(f"{self.message_spacer}• Log directory:    {self.conf_dest}/log")
 
-            os.environ[f"MY_{fw_name_upper}_CONF_DEST"]=self.conf_dest
-            os.environ[f"MY_{fw_name_upper}_CONF_TEMPLATE"]=self.conf_template
+            os.environ[f"MY_{self.fw_name}_CONF_DEST"]=self.conf_dest
+            os.environ[f"MY_{self.fw_name}_CONF_TEMPLATE"]=self.conf_template
             
-            if fw_name_upper == "SPARK":
+            if self.fw_name == "SPARK":
                 os.environ['PYSPARK_PYTHON'] = sys.executable
                     
             # Initializing configuration
             logger.info("Initializing configuration from template.")
-            fw_conf_opt=f"--framework {fw_name_lower} --template {self.conf_template} --destination {self.conf_dest}"
+            fw_conf_opt=f"--framework {self.fw_name.lower()} --template {self.conf_template} --destination {self.conf_dest}"
             fw_conf_cmd=f"source framework-configure.sh {fw_conf_opt}"
-            output = run_bash_cmd(f"{fw_conf_cmd}; env | grep {fw_name_upper}")
+            output = run_bash_cmd(f"{fw_conf_cmd}; env | grep {self.fw_name}")
             
             # Set the environment variable in Python script's environment
             for line in output.strip().split("\n"):
@@ -89,8 +92,8 @@ class ClusterConfig:
                     key, value = line.strip().split('=',1)    
                     os.environ[key] = value
     
-            conf_dest_full=f"{self.conf_dest}/{fw_name_lower}"
-            os.environ[f"{fw_name_upper}_CONF_DIR"] = conf_dest_full # Configuration is initialized inside spark directory
+            conf_dest_full=f"{self.conf_dest}/{self.fw_name.lower()}"
+            os.environ[f"{self.fw_name}_CONF_DIR"] = conf_dest_full # Configuration is initialized inside spark directory
             
             if self.fw_name == "SPARK":
                 self.master_port = 7077
@@ -102,7 +105,7 @@ class ClusterConfig:
                 job_id = os.environ['SLURM_JOBID']
                 job_digit = job_id[-3:] # Extract last three characters
                 self.master_port=int(job_digit) + 7077
-                os.environ[f"{fw_name_upper}_MASTER_PORT"]=f"{self.master_port}"
+                os.environ[f"{self.fw_name}_MASTER_PORT"]=f"{self.master_port}"
            
             slurm_node_list = get_slurm_nodelist()
  
@@ -114,10 +117,10 @@ class ClusterConfig:
             logger.info(f"{self.message_spacer}• Worker nodes: {', '.join(self.worker_hosts)}")
             
             # Add information to spark-env.sh
-            if fw_name_upper == "SPARK":
+            if self.fw_name == "SPARK":
                 with open(f"{conf_dest_full}/spark-env.sh", "a") as f:
                     f.write(f"export LD_LIBRARY_PATH={run_bash_cmd('echo $LD_LIBRARY_PATH')}\n")
-                    f.write(f"export {fw_name_upper}_MASTER_PORT={self.master_port}\n")
+                    f.write(f"export {self.fw_name}_MASTER_PORT={self.master_port}\n")
                     f.write(f"export SPARK_MASTER_HOST={self.master_host}\n")
                     f.close()
 
@@ -130,7 +133,7 @@ class ClusterConfig:
                 master_url_info = f""""""
             logger.info(f"{master_url_info}")
         
-            if fw_name_upper == "SPARK":
+            if self.fw_name == "SPARK":
                 logger.info(f"Once the cluster is started, one can access the spark GUI in browser using port forwarding.")
                 logger.info(f"To access, spark GUI, type following in your terminal on local machine:")
                 logger.info(f"{self.message_spacer}ssh {os.environ['USER']}@login1.{self.cluster_name} -L 4040:{self.master_host}:4040 -L 8080:{self.master_host}:8080 -L 8081:{self.master_host}:8081")

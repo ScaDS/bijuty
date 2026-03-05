@@ -102,3 +102,18 @@ This project is licensed under the GNU GENERAL PUBLIC LICENSE - see the [LICENSE
 
 ## Contact
 For more information contact us at [ScaDS.AI](https://scads.ai/scads-ai-team/contact/).
+
+
+# TODO
+- Add timer to notify if the job is ending
+
+
+# Note:
+- If the slurm docker throws error, run following
+```bash
+docker volume rm *
+docker network rm *
+docker buildx prune -f 
+docker buildx rm default 
+docker buildx create --use 
+```
