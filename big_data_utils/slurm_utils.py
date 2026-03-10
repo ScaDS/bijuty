@@ -65,3 +65,36 @@ class SlurmManager:
             f"{pretty_job_info}\n"
             f"=========================================="
         )
+    
+    def get_total_nodes(self):
+        return int(self.job_info['jobs'][0]['node_count']['number'])
+
+    def get_cpus_per_task(self):
+        return int(self.job_info['jobs'][0]['cpus_per_task']['number'])
+    
+    def get_tasks_per_node(self):
+        return int(self.job_info['jobs'][0]['tasks']['number'])
+    
+    def get_cpus_per_node(self):
+        return int(self.get_cpus_per_task() * self.get_tasks_per_node())
+    
+    def get_memory_per_cpu(self):
+        # In Mb
+        return int(self.job_info['jobs'][0]['memory_per_cpu']['number'])
+    
+    def get_memory_per_node(self):
+        # In Mb
+        mem_per_node = self.job_info['jobs'][0]['memory_per_node']
+        if mem_per_node['set']:
+            return int(mem_per_node['number'])
+        return int(self.get_memory_per_cpu() * self.get_cpus_per_task() * self.get_tasks_per_node())
+    
+    def get_total_cpus(self):
+        return int(self.get_cpus_per_node() * self.get_tasks_per_node())
+    
+    def get_nodes_list(self):
+        node_list = self.job_info['jobs'][0]['job_resources']['nodes']
+        if type(node_list) == list:
+            return node_list
+        else:
+            return [node_list]

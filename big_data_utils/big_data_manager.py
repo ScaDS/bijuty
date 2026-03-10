@@ -1,11 +1,15 @@
 import os
 import sys
 import shutil
+
+from big_data_utils.gui_utils import GUIUtils
 from .utils import SimpleLogger, run_bash_cmd
 import subprocess
 import socket
 from .slurm_utils import SlurmManager
 import time
+import psutil
+
 
 logger = SimpleLogger()
 
@@ -35,36 +39,99 @@ class BigDataManager:
         s = s + f"primary_hostname={self.cluster_name}"
         return s
 
+    def find_processes_using_dir(self, target_dir):
+        target_dir = self.parse_path(target_dir)
+        found_processes = []
+
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                # 1. Check if the process's Current Working Directory (CWD) is the target
+                if os.path.abspath(proc.cwd()) == target_dir:
+                    found_processes.append((proc.info['pid'], proc.info['name'], "Working Directory"))
+                
+                # 2. Check if the process has any files open inside that directory
+                for file in proc.open_files():
+                    if file.path.startswith(target_dir):
+                        found_processes.append((proc.info['pid'], proc.info['name'], f"Open File: {file.path}"))
+                        break # Found usage, no need to check other files for this PID
+            
+            except (psutil.AccessDenied, psutil.NoSuchProcess):
+                continue
+                
+        return found_processes
+                    
+    def parse_path(self, path :str, resolve_symlinks=True):
+        path = os.path.abspath(path)
+        if "~" in path:
+            path = os.path.expanduser(path)
+        if resolve_symlinks:
+            path = os.path.realpath(path)
+        return path
+        
+
+    
     # Setup configuration from template or from default values
-    def setup_config(self, conf_dest=None,conf_template=None,randomize_ports=False):
-        self.conf_dest = conf_dest
-        self.conf_template = conf_template
+    def setup_config(self, gui=False, conf_dest:str=None,conf_template:str=None,randomize_ports:bool=False):
+        if gui == True:
+            config_gui = GUIUtils(info=dict({
+                    "fw_name":self.fw_name,
+                    "slurm":self.slurm
+                }))
+            config_gui.launch_gui_config()
+            print(os.environ.get(f"{self.fw_name}_CONF_TEMPLATE"))
+            print(os.environ.get(f"{self.fw_name}_CONF_DIR"))
+            
+            return 0
+        
+
+        self.conf_dest = self.parse_path(conf_dest) if conf_dest else None
+        self.conf_template = self.parse_path(conf_template) if conf_template else None
         self.randomize_ports = randomize_ports
         
         if self.slurm.in_slurm_job:
             if not self.conf_dest:
                 # self.conf_dest = os.path.abspath(f"{os.environ['HOME']}/cluster-conf-{os.environ['SLURM_JOBID']}")
-                self.conf_dest = os.path.abspath(f"./cluster-conf-{os.environ['SLURM_JOBID']}")
+                self.conf_dest = self.parse_path(f"./cluster-conf-{os.environ['SLURM_JOBID']}")
             
+            # If the configuration directory already exists, archive it and create a new one
             if os.path.isdir(self.conf_dest):
-                logger.info(f"Removing existing configuration directory: '{self.conf_dest}'")
+                logger.info(f"Archiving existing configuration directory: '{self.conf_dest}'")
+                
+                results = self.find_processes_using_dir(self.conf_dest)
+                if results:
+                    print(f"{'PID':<10} {'Process Name':<25} {'Reason'}")
+                    print("-" * 60)
+                    for pid, name, reason in results:
+                        print(f"{pid:<10} {name:<25} {reason}")
                 try:
-                    shutil.move(self.conf_dest,f"{self.conf_dest}_old_{time.time_ns()}")
+                    # Define the archive name (shutil adds the .zip extension automatically)
+                    archive_name = f"{self.conf_dest}_backup_{time.time_ns()}"
+                    
+                    # Create the zip file
+                    shutil.make_archive(archive_name, 'zip', self.conf_dest)
+                    
+                    # Once zipped, remove the original directory
+                    shutil.rmtree(self.conf_dest)
+                    logger.info(f"Successfully archived to {archive_name}.zip and removed original directory.")
+                    
                 except Exception as e:
-                    logger.error(f"Error removing existing configuration directory: {e}")
-                    logger.info(f"Checking for running {self.fw_name} processes...")
-                    # Run the jps command to check for running Spark processes
-                    jps_output = subprocess.check_output(["jps"]).decode("utf-8")
-                    logger.error(jps_output)
-                    logger.error("Create a new cell. And kill the processes using command \"!kill <process_id>\"")
-                    raise Exception("Master and worker processes are already running")
+                    logger.error(f"Error archiving configuration directory: {e}")
+                    if results:
+                        print(f"{'PID':<10} {'Process Name':<25} {'Reason'}")
+                        print("-" * 60)
+                        for pid, name, reason in results:
+                            print(f"{pid:<10} {name:<25} {reason}")
+                    else:
+                        print("No processes found using this directory.")
+                    logger.error("Create a new cell and kill the processes using command \"!kill <process_id>\"")
             else:
-                logger.debug(f"Creating new configuration directory: '{self.conf_dest}'")
-                os.mkdir(self.conf_dest)
+                logger.info(f"Creating new configuration directory: '{self.conf_dest}'")
+                os.makedirs(self.conf_dest, exist_ok=True)
             
             if self.conf_template == None:
+                # If template is not provided, try to get from environment variable
                 self.conf_template = os.environ[f"{self.fw_name}_CONF_TEMPLATE"]
-            self.conf_template = os.path.abspath(self.conf_template)
+            self.conf_template = self.parse_path(self.conf_template)
         
             logger.info("Environment configuration initialized:")
             logger.info(f"{self.message_spacer}• Framework:        {self.fw_name}")
@@ -156,17 +223,39 @@ class BigDataManager:
             logger.error("Please inititalize configuration using:  ") 
             logger.error("<your-config-class-variable>.configure_env(...)")
 
-    def get_worker_hosts(self):
-        return self.worker_hosts
+    # def get_worker_hosts(self):
+    #     return self.worker_hosts
 
-    def get_master_host(self):
-        return self.master_host
+    # def get_master_host(self):
+    #     return self.master_host
 
-    def get_master_port(self):
-        return self.master_port
+    # def get_master_port(self):
+    #     return self.master_port
 
-def get_slurm_nodelist():
-    return run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST").split("\n")
+    # def get_slurm_nodelist():
+    #     return run_bash_cmd("scontrol show hostnames $SLURM_JOB_NODELIST").split("\n")
+
+    def start_cluster(self):    
+        logger.info(f"Starting {self.fw_name} cluster.")
+        
+        if self.fw_name=='SPARK':
+            run_bash_cmd(f"nohup start-all.sh > {self.cluster_log} 2>&1")
+        elif self.fw_name=='FLINK':
+            run_bash_cmd(f"nohup start-cluster.sh > {self.cluster_log} 2>&1")
+    
+        time.sleep(5)
+        logger.info(f"Logging cluster startup info at: {self.cluster_log}")
+    
+    def stop_cluster(self):
+        logger.info(f"Stopping {self.fw_name} cluster.")
+        
+        if self.fw_name=='SPARK':
+            run_bash_cmd(f"nohup stop-all.sh >> {self.cluster_log} 2>&1")
+        elif self.fw_name=='FLINK':
+            run_bash_cmd(f"nohup stop-cluster.sh >> {self.cluster_log} 2>&1")
+       
+        time.sleep(3)
+        logger.info(f"Logging cluster stopping info at: {self.cluster_log}")
 
 
 # End of the file
