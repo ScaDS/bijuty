@@ -92,6 +92,9 @@ class SlurmManager:
     def get_total_cpus(self):
         return int(self.get_cpus_per_node() * self.get_tasks_per_node())
     
+    def get_total_memory(self):
+        return int(self.get_memory_per_node() * self.get_total_nodes())
+    
     def get_nodes_list(self):
         node_list = self.job_info['jobs'][0]['job_resources']['nodes']
         if type(node_list) == list:

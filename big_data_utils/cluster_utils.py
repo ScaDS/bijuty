@@ -10,15 +10,15 @@ logger = SimpleLogger()
 
 class ClusterService:
     def __init__(self, fw_name):
-        self.fw_name = fw_name.upper()
-        self.fw_conf_dir = os.environ[f"{self.fw_name}_CONF_DIR"]
+        # self.fw_name = fw_name.upper()
+        # self.fw_conf_dir = None
                        
-        if self.fw_name in [ 'SPARK', 'FLINK']:
-            self.cluster_log = f"{self.fw_conf_dir}/log/cluster.log"
-            self.log_dir = f"{self.fw_conf_dir}/log"
+        # if self.fw_name in [ 'SPARK', 'FLINK']:
+        # self.cluster_log = f"{self.fw_conf_dir}/log/cluster.log"
+        # self.log_dir = f"{self.fw_conf_dir}/log"
     
     def start_cluster(self):    
-        logger.info(f"Starting {self.fw_name} cluster.")
+        logger.info(f"Starting {get_} cluster.")
         
         if self.fw_name=='SPARK':
             run_bash_cmd(f"nohup start-all.sh > {self.cluster_log} 2>&1")
