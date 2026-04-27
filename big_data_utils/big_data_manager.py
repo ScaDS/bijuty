@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import psutil
 
 from .slurm_utils import SlurmManager
+from .gui_components import FrameworkConfig
 from .utils import SimpleLogger, run_bash_command
 
 # =============================================================================
@@ -173,6 +174,7 @@ class BigDataManager:
         # Initialize user inputs namespace
         self._user_inputs = SimpleNamespace(
             fw_name="",
+            fw_home="",
             master="",
             workers=[],
             master_port="",
@@ -214,13 +216,14 @@ class BigDataManager:
             props: Dictionary with keys: fw_name, master, workers, master_port,
                    conf_dir, log_dir, fw_mapping
         """
-        self._user_inputs.fw_name = str(props.get("fw_name", ""))
-        self._user_inputs.master = str(props.get("master", ""))
-        self._user_inputs.workers = props.get("workers", [])
-        self._user_inputs.master_port = str(props.get("master_port", ""))
-        self._user_inputs.conf_dir = str(props.get("conf_dir", ""))
-        self._user_inputs.log_dir = str(props.get("log_dir", ""))
-        self._fw_mapping = props.get("fw_mapping", {})
+        self._user_inputs.fw_name = str(props.get("fw_name"))
+        self._user_inputs.fw_home = str(props.get("fw_home"))
+        self._user_inputs.master = str(props.get("master"))
+        self._user_inputs.workers = props.get("workers")
+        self._user_inputs.master_port = str(props.get("master_port"))
+        self._user_inputs.conf_dir = str(props.get("conf_dir"))
+        self._user_inputs.log_dir = str(props.get("log_dir"))
+        self._fw_mapping = props.get("fw_mapping")
         self._initialized = True
 
     # =====================================================================
@@ -625,35 +628,37 @@ class BigDataManager:
             NotInitializedError: If manager hasn't been initialized
             ClusterOperationError: If start operation fails
         """
+        
         if not self._initialized:
             raise NotInitializedError("Manager must be initialized before starting cluster")
-
+        
         # Stop existing cluster if running
-        if self.is_cluster_up():
+        if self.is_cluster_up():    
             logger.info(f"{self._user_inputs.fw_name} cluster already running - stopping first")
             self.stop_cluster()
 
         logger.info(f"Starting {self._user_inputs.fw_name} cluster")
 
-        fw_config = self._fw_mapping.get(self._user_inputs.fw_name.upper(), {})
-        cmd_script = fw_config.get("start_proc_cmd")
+        fw_config : FrameworkConfig = self._fw_mapping.get(self._user_inputs.fw_name.upper(), {})
+        cmd_script = os.path.join(self._user_inputs.fw_home,fw_config.start_cmd).strip()
 
         if not cmd_script:
+            #logger.error(f"Unsupported framework: {self._user_inputs.fw_name}")
             raise ClusterOperationError(f"Unsupported framework: {self._user_inputs.fw_name}")
 
         log_path = self.get_cluster_log_file()
         full_cmd = f"{cmd_script} > {log_path} 2>&1"
 
-        logger.debug(f"Running: {full_cmd}")
+        logger.info(f"Running: {full_cmd}")
         result = run_bash_command(full_cmd, shell=True)
 
         if result.failed:
             logger.error(f"Failed to start cluster: {result.stderr}")
             return False
 
-        logger.debug(result.stdout)
+        logger.info(result.stdout)
 
-        if self.wait_for_cluster_init(timeout=1000):
+        if self.wait_for_cluster_init(timeout=60):
             logger.info(f"{self._user_inputs.fw_name} cluster started successfully")
             return True
 
@@ -675,8 +680,10 @@ class BigDataManager:
 
         logger.info(f"Stopping {self._user_inputs.fw_name} cluster")
 
-        fw_config = self._fw_mapping.get(self._user_inputs.fw_name.upper(), {})
-        cmd_script = fw_config.get("stop_proc_cmd")
+        fw_config: FrameworkConfig = self._fw_mapping.get(self._user_inputs.fw_name.upper(), {})
+#        cmd_script = fw_config.stop_cmd
+        cmd_script = os.path.join(self._user_inputs.fw_home,fw_config.stop_cmd).strip()
+
 
         if not cmd_script:
             logger.error(f"No stop command for framework: {self._user_inputs.fw_name}")

@@ -15,6 +15,8 @@ import sys
 import time
 import traceback
 from typing import Any, Dict, List, Optional
+import io
+from contextlib import redirect_stdout, redirect_stderr
 
 import ipywidgets as widgets
 from IPython.display import clear_output, display
@@ -28,7 +30,10 @@ from .gui_components import (
     fetch_image,
 )
 from .slurm_utils import SlurmManager
-from .utils import run_bash_command
+from .utils import run_bash_command, SimpleLogger
+
+
+logger = SimpleLogger()
 
 
 # =============================================================================
@@ -88,20 +93,44 @@ class GUIUtils:
         except Exception as e:
             self.wdg_viz_display.value = f"<div style='color: red;'>Error: {str(e)}</div>"
 
-    def _log(self, message: str, msg_type: str = "info") -> None:
+    def _log(self, message: str = "", msg_type: str = "info", wrap_function_stdout: bool = False, func: callable = None) -> None:
         """Log a message to the output area.
 
         Args:
             message: The message to log.
             msg_type: The type of message - "info", "error", or "debug".
+            wrap_function_stdout: To output all stdout/stderr of the called function.
+            func: The function to execute and capture output from (used with wrap_function_stdout=True).
         """
-        with self.widgets["output_area"]:
-            if msg_type == "error":
-                print(f"[ERROR] {message}")
-            elif msg_type == "debug":
-                print(f"[DEBUG] {message}")
-            else:
-                print(f"[INFO ] {message}")
+        if wrap_function_stdout:
+            if func is None:
+                raise ValueError("func must be provided when wrap_function_stdout=True")
+            
+            stdout_capture = io.StringIO()
+            stderr_capture = io.StringIO()
+            
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                result = func()
+            
+            stdout_output = stdout_capture.getvalue()
+            stderr_output = stderr_capture.getvalue()
+            
+            with self.widgets["output_area"]:
+                if stdout_output:
+                    logger.info(stdout_output)
+                if stderr_output:
+                    logger.error(stderr_output)
+            return result
+        else:
+            with self.widgets["output_area"]:
+                if msg_type == "error":
+                    logger.error(message)
+                elif msg_type == "debug":
+                    logger.debug(message)
+                else:
+                    logger.info(message)
+
+
 
     def set_environment(self, b: widgets.Button) -> None:
         """Set up the environment when the load button is clicked."""
@@ -147,6 +176,9 @@ class GUIUtils:
 
         self._widgets["framework"] = self._create_framework_widget()
         self._widgets["logo"] = self._create_logo_widget()
+
+        self._widgets["framework_home"] = self._create_framework_home_widget()
+
         self._widgets["template"] = self._create_template_widget()
         self._widgets["destination"] = self._create_destination_widget()
         self._widgets["master_host"] = self._create_master_host_widget()
@@ -162,7 +194,7 @@ class GUIUtils:
 
         self._widgets["randomize_port"] = self._create_randomize_port_widget()
         self._widgets["load_button"] = self._create_load_button()
-        self._widgets["output_area"] = widgets.Output()
+        self._widgets["output_area"] = self._create_output_area()
 
         self._widgets["start_cluster"] = self._create_start_cluster_button()
         self._widgets["stop_cluster"] = self._create_stop_cluster_button()
@@ -173,9 +205,10 @@ class GUIUtils:
 
     def _create_framework_widget(self) -> widgets.Dropdown:
         """Create the framework selection widget."""
+        framework_list = list(FRAMEWORK_REGISTRY.keys())
         return WidgetFactory.create_dropdown(
-            options=list(FRAMEWORK_REGISTRY.keys()),
-            value=None,
+            options=framework_list,
+            value=framework_list[0],
             description="Framework:",
         )
 
@@ -196,8 +229,32 @@ class GUIUtils:
                 height=100,
             )
         except Exception as e:
-            print(f"Error loading logo: {e}")
+            self._log(f"Error loading logo: {e}",msg_type="error")
             return create_placeholder_logo()
+
+    def _create_framework_home_widget(self) -> widgets.VBox:
+        """Create checkbox and path input for FRAMEWORK_HOME (SPARK/FLINK)."""
+        fw_name = self.get_selected_framework_name() or "SPARK"
+        label_text = f"Use custom {fw_name}_HOME : "
+
+        checkbox = WidgetFactory.create_checkbox(
+            value=False,
+            description=label_text,
+        )
+
+        path_input = WidgetFactory.create_text(
+            value="",
+            description=f"",
+            disabled=True,
+        )
+
+        def toggle_path_input(change: Dict[str, Any]) -> None:
+            path_input.disabled = not change["new"]
+
+        checkbox.observe(toggle_path_input, names="value")
+
+        return widgets.HBox([checkbox, path_input])
+
 
     def _create_template_widget(self) -> widgets.VBox:
         """Create the template selection widget."""
@@ -367,6 +424,24 @@ class GUIUtils:
         button.disabled = not self.is_config_set
         button.on_click(self._on_stop_cluster_clicked)
         return button
+    
+    def _create_output_area(self) -> widgets.Output:
+        output_widget = widgets.Output(
+            layout=widgets.Layout(
+                height="200px",
+                max_height="200px",
+                overflow="auto",
+                background_color="#333333",
+                color="white",
+                border="2px solid #555555",
+                border_radius="4px",
+                padding="8px",
+            )
+        )
+        # Add custom class for CSS targeting
+        output_widget.add_class("wrapped-output")
+        return output_widget
+
 
     # =========================================================================
     # Event Handlers
@@ -375,6 +450,7 @@ class GUIUtils:
     def _attach_widget_observers(self) -> None:
         """Attach observers to widgets for interactivity."""
         observable_widgets = [
+            self.widgets["framework"],
             self.widgets["logo"],
             self.widgets["template"],
             self.widgets["destination"],
@@ -394,6 +470,9 @@ class GUIUtils:
 
         # Set up dynamic range updates
         self._setup_dynamic_ranges()
+
+        self.widgets["framework"].observe(self._update_framework_home_labels, names="value")
+
 
     def _setup_dynamic_ranges(self) -> None:
         """Set up dynamic widget range interdependencies."""
@@ -459,20 +538,24 @@ class GUIUtils:
         """Handle start cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
         try:
-            self._last_cluster_result = self.bdm.start_cluster()
+            with self.widgets["output_area"]:
+                self._last_cluster_result = self.bdm.start_cluster()
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
         except Exception as e:
-            print("Failed to start cluster:", e)
+            tb = traceback.format_exc()
+            self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
 
     def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle stop cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
         try:
-            self._last_cluster_result = self.bdm.stop_cluster()
-            self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
+            #self._last_cluster_result = self._log(wrap_function_stdout=True, func=self.bdm.stop_cluster)
+            with self.widgets["output_area"]:
+                self._last_cluster_result = self.bdm.stop_cluster()
+                self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
         except Exception as e:
-            print("Failed to stop cluster:", e)
+            self._log(f"Failed to stop cluster:{e}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
 
     def _toggle_cluster_buttons(
@@ -491,6 +574,21 @@ class GUIUtils:
             self.widgets["start_cluster"].disabled = start_disabled
         if stop_disabled is not None:
             self.widgets["stop_cluster"].disabled = stop_disabled
+
+    def _update_framework_home_labels(self, change: Dict[str, Any]) -> None:
+        """Update framework home widget labels when framework changes."""
+        fw_name = change["new"].upper()
+        framework_home_widget = self.widgets.get("framework_home")
+        
+        if framework_home_widget and len(framework_home_widget.children) >= 2:
+            checkbox = framework_home_widget.children[0]
+            path_input = framework_home_widget.children[1]
+            
+            # Update checkbox description
+            checkbox.description = f"Use custom {fw_name}_HOME : "
+            
+            # Update path input description
+            #path_input.description = f"{fw_name}_HOME Path:"
 
     # =========================================================================
     # GUI Assembly
@@ -524,8 +622,45 @@ class GUIUtils:
             ),
         )
 
+        # Inject CSS for text wrapping in output area
+        style_html = """
+        <style>
+        .wrapped-output pre {
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            max-width: 100% !important;
+            background-color:"#333333";
+            color:"white";
+        }
+        .wrapped-output .jp-OutputArea-output pre {
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            background-color:"#333333";
+            color:"white";
+        }
+        </style>
+        <script>
+        function scrollToBottom() {
+            var outputArea = document.querySelector('.jp-OutputArea-output');
+            if (outputArea) {
+                outputArea.scrollTop = outputArea.scrollHeight;
+            }
+        }
+        // Scroll immediately and after any DOM changes
+        scrollToBottom();
+        var observer = new MutationObserver(scrollToBottom);
+        document.addEventListener('DOMContentLoaded', function() {
+            observer.observe(document.body, { childList: true, subtree: true });
+            setInterval(scrollToBottom, 500);
+        });
+        </script>
+        """
+        style_widget = widgets.HTML(value=style_html)
+
         main_container = widgets.VBox(
-            [row1, row2,self.widgets["output_area"]],
+            [style_widget, row1, row2, self.widgets["output_area"]],
             layout=widgets.Layout(
                 display="flex",
                 flex_flow="column",
@@ -545,6 +680,7 @@ class GUIUtils:
             self.widgets["header_config"],
             self.widgets["logo"],
             self.widgets["framework"],
+            self.widgets["framework_home"],
             self.widgets["template"],
             self.widgets["destination"],
             self.widgets["master_host"],
@@ -682,6 +818,31 @@ class GUIUtils:
     def get_selected_pid_dir(self) -> str:
         """Get the selected PID directory."""
         return f"{self.get_selected_config_destination()}/pid"
+    
+    def _is_custom_framework_home_enabled(self) -> bool:
+        """Check if custom framework home is enabled."""
+        framework_home_widget = self.widgets.get("framework_home")
+        if framework_home_widget and framework_home_widget.children:
+            return framework_home_widget.children[0].value
+        return False
+
+    def get_selected_framework_home(self) -> str:
+        """Get the custom framework home path."""
+        if self._is_custom_framework_home_enabled():
+            framework_home_widget = self.widgets.get("framework_home")
+            if framework_home_widget and len(framework_home_widget.children) > 1:
+                return framework_home_widget.children[1].value
+        elif f"{self.get_selected_framework_name().upper()}_HOME" in os.environ.keys():
+            return os.environ[f"{self.get_selected_framework_name()}_HOME"]
+        else:
+            raise ValueError(
+                "Framework is not set. Either provide a custom path or set the "
+                f"'{self.get_selected_framework_name().upper()}_HOME' environment variable"
+            )
+        
+    def _set_framework_home(self) -> None:
+        os.environ[f"{self.get_selected_framework_home()}_HOME"] = self.get_selected_framework_home()
+    
 
     # =========================================================================
     # Visualization Helpers
@@ -746,6 +907,7 @@ class GUIUtils:
     
     def _execute_framework_setup(self) -> None:
         """Execute the bash command to set up the framework."""
+        self._set_framework_home()
         self._set_default_fw_config_template()
 
         fw_name = shlex.quote(self.get_selected_framework_name().lower())
@@ -759,7 +921,7 @@ class GUIUtils:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         
         bash_command = (
-            f"cd {script_dir} && source framework-configure.sh "
+            f"cd {script_dir} && source ./framework-configure.sh "
             f"--framework {fw_name} "
             f"--template {template} "
             f"--destination {dest} "
@@ -774,7 +936,7 @@ class GUIUtils:
 
         if res.returncode != 0:
             self._set_load_button_failed()
-            self._log("Bash script failed with exit code {res.returncode}.\nError: {res.stderr}","error")
+            self._log(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}","error")
             raise RuntimeError(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}")
 
         # Update environment variables
@@ -821,6 +983,8 @@ class GUIUtils:
 
     def _update_env_file(self, env_updates: Dict[str, str]) -> None:
         """Update the Spark environment file."""
+        
+        # Setting spark env file
         file_path = os.path.join(
             self.get_selected_config_destination(), "spark-env.sh"
         )
@@ -848,6 +1012,16 @@ class GUIUtils:
 
         with open(file_path, "w") as f:
             f.write(content)
+        
+        # Setting log4j file
+        file_path = os.path.join(
+            self.get_selected_config_destination(), "log4j2.properties"
+        )
+        with open(file_path, "r") as f:
+            content = f.read().replace("FRAMEWORK_LOG_DIR", self.get_selected_log_dir())
+        with open(file_path, "w") as f:
+            f.write(content)
+
 
     def _update_worker_file(self) -> None:
         """Update the Spark worker file."""
@@ -861,9 +1035,9 @@ class GUIUtils:
 
     def _handle_setup_error(self, error: Exception) -> None:
         """Handle setup errors."""
-        print(f"FATAL ERROR: {str(error)}")
+        self._log(f"FATAL ERROR: {str(error)}")
         tb = traceback.format_exc()
-        print(tb)
+        self._log(tb, msg_type="error")
         self._set_load_button_failed()
         self.is_config_set = False
         self._toggle_cluster_buttons(all_disabled=False)
@@ -885,6 +1059,7 @@ class GUIUtils:
         """Initialize the BigDataManager with user input."""
         self.bdm.initialize_user_input({
             "fw_name": self.get_selected_framework_name(),
+            "fw_home": self.get_selected_framework_home(),
             "master": self.get_selected_master_host(),
             "workers": self.get_selected_workers(),
             "master_port": self.get_selected_master_port(),

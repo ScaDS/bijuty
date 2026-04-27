@@ -111,8 +111,8 @@ class ResourceAllocation:
 FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
     "SPARK": FrameworkConfig(
         name="SPARK",
-        start_cmd="start-all.sh",
-        stop_cmd="stop-all.sh",
+        start_cmd="sbin/start-all.sh", # relative to framework home dir
+        stop_cmd="sbin/stop-all.sh",   # relative to framework home dir
         proc_master="org.apache.spark.deploy.master.Master --host",
         proc_worker="org.apache.spark.deploy.worker.Worker --webui-port",
         proc_other=[
@@ -134,8 +134,8 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
     ),
     "FLINK": FrameworkConfig(
         name="FLINK",
-        start_cmd="start-cluster.sh",
-        stop_cmd="stop-cluster.sh",
+        start_cmd="bin/start-cluster.sh",
+        stop_cmd="bin/stop-cluster.sh",
         proc_master="org.apache.flink.runtime.entrypoint.StandaloneSessionClusterEntrypoint",
         proc_worker="org.apache.flink.runtime.taskexecutor.TaskManagerRunner",
         logo_url="https://flink.apache.org/img/logo/png/200/flink_squirrel_200_color.png",
@@ -422,13 +422,15 @@ class WidgetFactory:
         layout: Optional[widgets.Layout] = None,
     ) -> widgets.IntSlider:
         """Create a standardized IntSlider widget."""
+        slider_style = label_style or DEFAULT_LABEL_STYLE
+        slider_style["handle_color"] = "blue"
         return widgets.IntSlider(
             value=value,
             min=min_val,
             max=max_val,
             step=step,
             description=description,
-            style=label_style or DEFAULT_LABEL_STYLE,
+            style=slider_style,
             layout=layout or DEFAULT_WIDGET_LAYOUT,
         )
 
