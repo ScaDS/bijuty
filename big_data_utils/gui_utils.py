@@ -1,601 +1,240 @@
-# big_data_utils/gui_utils.py
-import time
-import sys
-import ipywidgets as widgets
-from IPython.display import display, clear_output
-import requests
+"""
+GUI utilities for configuring and managing big data frameworks (Spark, Flink).
+
+This module provides the main GUI orchestration, event handling, and environment
+setup for big data clusters using ipywidgets.
+"""
+
+from __future__ import annotations
+
 import os
-import shutil
 import re
-import socket
-import subprocess
 import shlex
+import socket
+import sys
+import time
 import traceback
-from .utils import run_bash_command
-from .slurm_utils import SlurmManager
+from typing import Any, Dict, List, Optional
+
+import ipywidgets as widgets
+from IPython.display import clear_output, display
+
 from .big_data_manager import BigDataManager
+from .gui_components import (
+    FRAMEWORK_REGISTRY,
+    HTMLGenerator,
+    WidgetFactory,
+    create_placeholder_logo,
+    fetch_image,
+)
+from .slurm_utils import SlurmManager
+from .utils import run_bash_command
+
+
+# =============================================================================
+# Main GUI Class
+# =============================================================================
 
 class GUIUtils:
-    def __init__(self):
+    """
+    GUI utilities for configuring and managing big data frameworks.
 
-        # self.fw_name = fw_name.upper()
-        # if self.fw_name not in [ 'FLINK', 'SPARK']:
-        #     raise Exception("Sorry, frameworks other than 'flink' and 'spark' is not supported.")
+    This class provides an interactive Jupyter notebook interface for:
+    - Selecting big data frameworks (Spark, Flink)
+    - Configuring cluster resources (CPU, Memory)
+    - Visualizing resource allocation
+    - Starting and stopping clusters
+    """
+
+    def __init__(self):
+        """Initialize the GUI utilities."""
         self.is_config_set = False
-        
-        self.slurm_info = SlurmManager()
-        self.bdm = BigDataManager()
-        
-        debug_set_slurm_true = False
-        if debug_set_slurm_true:
-            self.slurm.in_slurm_job = debug_set_slurm_true        
+        self.user = os.environ.get("USER", "unknown")
         self.cluster_name = socket.getfqdn().strip()
 
-        self.fw_mapping = {
-            "SPARK": {
-                "start_proc_cmd": "start-all.sh",
-                "stop_proc_cmd": "stop-all.sh",
-                "proc_name_master": "org.apache.spark.deploy.master.Master --host",
-                "proc_name_worker": "org.apache.spark.deploy.worker.Worker --webui-port",
-                "proc_name_other": [
-                    "org.apache.spark.deploy.SparkSubmit",
-                    "org.apache.spark.executor.CoarseGrainedExecutorBackend",
-                    "org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend"
-                ],
-                "logo":"https://spark.apache.org/images/spark-logo-back.png",
-                "worker_file": "workers",
-                "default_master_port": 7077,
-                "default":{
-                    "mem_driver": 1000,
-                    "mem_worker": 1000,
-                    "mem_executor": 1000,
-                    "cpu_driver": 1,
-                    "cpu_worker": 1,
-                    "cpu_executor": 1,
-                }
+        # Initialize managers
+        self.slurm_info = SlurmManager()
+        self.bdm = BigDataManager()
 
-            },
-            "FLINK": {
-                "start_proc_cmd": "start-cluster.sh",
-                "stop_proc_cmd": "stop-cluster.sh",
-                "proc_name_master": "org.apache.flink.runtime.entrypoint.StandaloneSessionClusterEntrypoint",
-                "proc_name_worker": "org.apache.flink.runtime.taskexecutor.TaskManagerRunner",
-                "logo":"https://flink.apache.org/img/logo/png/200/flink_squirrel_200_color.png",
-                "worker_file": "workers",
-                "default_master_port": 8081,
-            }
-        }
+        # Widget containers
+        self._widgets: Dict[str, Any] = {}
+        self._last_cluster_result: Optional[Any] = None
 
-        
-        self.user = os.environ.get('USER')
-        self.label_style = {
-            'font_weight': 'bold',
-            'color': '#333333',
-            'font_size': '14px',
-            'description_width': '150px',
-        }
-        self.widget_layout = widgets.Layout(
-            width='100%',
-            margin='5px 0px',
-            display='flex',
-            flex_flow='row',
-        )
+        # Display widget
         self.wdg_viz_display = widgets.HTML()
 
-    def get_viz_proportions(self):
-        # Get values from your widgets
-        # Defaulting to 1 if 0 to avoid division by zero
-        drv_mem = float(self.get_from_selection_driver_memory_val())
-        wrk_mem = float(self.get_from_selection_worker_memory_val())
-        exe_mem = float(self.get_from_selection_executor_memory_val())
-        
-        # Define a 'Total Capacity' for the visualization (e.g., a 64GB Node)
-        node_mem_capacity = self.slurm_info.get_memory_per_node()
-        
-        # Calculate height percentages
-        # We cap them at 100% just in case
-        master_mem_height = (drv_mem / node_mem_capacity) * 100 #max((drv_mem / node_capacity) * 100, 30)
-        worker_mem_height = (wrk_mem / node_mem_capacity) * 100 #max((wrk_mem / node_capacity) * 100, 30)
-        executor_mem_height = (exe_mem / wrk_mem) * 100 #max((wrk_mem / node_capacity) * 100, 30)
+        # Debug flag
+        self._debug_set_slurm_true = False
+        if self._debug_set_slurm_true:
+            self.slurm_info.in_slurm_job = True
 
-        drv_cpu = float(self.get_from_selection_driver_cpu())
-        wrk_cpu = float(self.get_from_selection_worker_cpu())
-        exe_cpu = float(self.get_from_selection_executor_cpu())
-        
-        node_cpu_capacity = self.slurm_info.get_cpus_per_node()
-        master_cpu_height = max((drv_cpu / node_cpu_capacity) * 100,10)
-        worker_cpu_height = max((wrk_cpu / node_cpu_capacity) * 100,10)
-        executor_cpu_height = max((exe_cpu / wrk_cpu) * 100,10)
-        
-        return {
-            'total_mem': "100%",
-            'drv_mem_height': f"{master_mem_height}%",
-            'wrk_mem_height': f"{worker_mem_height}%",
-            'exe_mem_height': f"{executor_mem_height}%",
-            'total_mem_val': f"{int(node_mem_capacity)}MB",
-            'drv_mem_val': f"{int(drv_mem)}MB",
-            'wrk_mem_val': f"{int(wrk_mem)}MB",
-            'exe_mem_val': f"{int(exe_mem)}MB",
-            'total_cpu_height': "100%",
-            'drv_cpu_height': f"{master_cpu_height}%",
-            'wrk_cpu_height': f"{worker_cpu_height}%",
-            'exe_cpu_height': f"{executor_cpu_height}%",
-            'total_cpu_val': f"{int(node_cpu_capacity)}",
-            'drv_cpu_val': f"{int(drv_cpu)}",
-            'wrk_cpu_val': f"{int(wrk_cpu)}",
-            'exe_cpu_val': f"{int(exe_cpu)}"
-        }
-    
-    def update_process_viz(self, change=None):
-        props = self.get_viz_proportions()
-        
-        def render_cpu_process(props: dict) -> str:
-            def process_style(height, col_background, col_text):
-                return f"""
-                    height: calc({height}); 
-                    background: {col_background}; 
-                    color: {col_text};
-                    transition: height 0.4s ease;
-                    position: relative;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    width:calc(100% - 10px);
-                """
-            
-            def sub_process_style(height, col_background, col_text):
-                return f"""
-                    background: {col_background};
-                    color: {col_text};
-                    padding: 0px 0px 0px 0px;
-                    border-radius: 0px;
-                    font-size: 11px;
-                    width:100%;
-                    max-width:100%;
-                    height:{height};
-                """
-            """
-            Returns the HTML snippet for the CPU process block.
+    # =========================================================================
+    # Public API
+    # =========================================================================
 
-            keys:
-            outer_title
-            outer_height
-            outer_style_bkg_clr
-            outer_style_text_clr
-            inner_title
-            inner_height
-            inner_style_bkg_clr
-            inner_style_text_clr
+    def launch_gui_config(self) -> None:
+        """Launch the main configuration GUI."""
+        self._create_widgets()
+        self._attach_widget_observers()
+        self._setup_visualization_triggers()
+        self._assemble_and_display_gui()
 
-            """
-            outer_title = props.get("outer_title", "Outer Title:Val").split(":")[0]
-            outer_bg_clr   = props.get("outer_style_bkg_clr", "#9ac3f4")
-            outer_txt_clr  = props.get("outer_style_text_clr", "#1565c0")
-            outer_height = props.get("outer_height", "100%")
-            inner_title = props.get("inner_title", "Inner Title")
-            inner_bg_clr   = props.get("inner_style_bkg_clr", "#1565c0")
-            inner_txt_clr  = props.get("inner_style_text_clr", "#ffffff")
-            inner_txt = props.get("inner_text", "")
-            inner_height = props.get("inner_height", "100%")
+    def update_process_viz(self, change: Optional[Any] = None) -> None:
+        """Update the process visualization display."""
+        try:
+            props = self._get_viz_proportions()
+            html_template = HTMLGenerator.generate_viz_template(props, self.slurm_info)
+            self.wdg_viz_display.value = html_template
+        except Exception as e:
+            self.wdg_viz_display.value = f"<div style='color: red;'>Error: {str(e)}</div>"
 
-            outer_style   = process_style(
-                height=outer_height,
-                col_background=outer_bg_clr,
-                col_text=outer_txt_clr
-            )
-            inner_style  = sub_process_style(
-                height=inner_height,
-                col_background=inner_bg_clr,
-                col_text=inner_txt_clr
-            )
+    def _log(self, message: str, msg_type: str = "info") -> None:
+        """Log a message to the output area.
 
-            return f"""
-                <div style="{outer_style}">
-                    <div style="position:absolute; left:0; top:0; bottom:0; width:20px;
-                                display:flex; align-items:center; justify-content:center;
-                                writing-mode:sideways-lr; text-orientation:mixed;
-                                background:{outer_bg_clr}; 
-                                color:black;
-                                font-weight:bold;">
-                        {outer_title}
-                    </div>
-                    <div>{props.get("outer_title", "Outer Title").split(":")[1]}</div>
-                    <div style="{inner_style}; display: flex; align-items: center; justify-content:center;">
-                        <div style="position:absolute; left:20px; width:20px;
-                                    display:flex; align-items:center; justify-content:center;
-                                    writing-mode:sideways-lr; text-orientation:mixed;
-                                    background:{inner_bg_clr}; color:{inner_txt_clr}; font-weight:bold;">
-                            {inner_title}
-                        </div>
-                        <div style="padding:0 45px;">{inner_txt}</div>
-                    </div>
-                </div>
-            """.strip()
-
-        def render_slurm_info(slurm_info):
-            return f"""
-                <div style="display:flex; text-align: center; flex-direction: column;">
-                    <div style="text-align: center; font-weight: bold; margin-bottom: 10px; width:100%">
-                        Slurm Job
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 33% 33% 33%; align-items: center; justify-content:center">
-                        <div style="color: #666; font-size: 12px; padding:0px">
-                            NODES
-                            <div style="font-family: monospace; font-weight: bold; color: #2980b9;align-items:center;justify-content:center;">
-                                {",".join(slurm_info.get_nodes_list())}
-                            </div>
-                        </div>
-                        <div style="color: #666; font-size: 12px; align-items:center;justify-content:center;">
-                            CPU CORES
-                            <div style="font-weight: bold;">{slurm_info.get_total_cpus()} Cores</div>
-                        </div>
-                        <div style="color: #666; font-size: 12px; text-transform: uppercase;align-items:center;justify-content:center;">
-                            MEMORY
-                            <div style="font-weight: bold;">{slurm_info.get_total_memory()} MB</div>
-                        </div>
-                    </div>
-                </div>
-            """
-
-        html_template = f"""
-        <div style="
-            border: 3px solid #444; 
-            border-radius: 10px; 
-            width: 95%; 
-            height: 700px;
-            overflow-y: scroll;
-            background: #f0f0f0; 
-            display: flex; 
-            flex-direction: column; 
-            padding: 10px;
-            font-family: sans-serif;
-        ">
-            {render_slurm_info(self.slurm_info)}    
-            
-            <div style="
-                display: flex;
-                flex-direction: row; 
-                justify-content: space-between; 
-                width: 100%; 
-                gap: 0px;
-                margin-top: 0px;
-                height:100%;
-                font-size: 10px;
-                border: 2px solid #444; 
-                border-radius: 10px; 
-            ">
-                <div style="width: 50%; display: flex; flex-direction: column; gap: 0px; height:100%;align-items:center;">
-                    <b>CPU</b>
-                    {render_cpu_process({
-                        "outer_height": props['drv_cpu_height'],
-                        "outer_style_bkg_clr": "#9ac3f4",
-                        "outer_style_text_clr": "#1565c0",
-                        "outer_title": f"Master: {props['drv_cpu_val']}",
-                        "inner_height": "100%",
-                        "inner_style_bkg_clr": "#1565c0",
-                        "inner_style_text_clr": "#ffffff",
-                        "inner_title": "Driver",
-                        "inner_text": "CPU: " + props['drv_cpu_val'],
-                    })}
-
-
-                    {render_cpu_process({
-                        "outer_height": props['wrk_cpu_height'],
-                        "outer_style_bkg_clr": "#8ff898",
-                        "outer_style_text_clr": "#4caf50",
-                        "outer_title": f"Worker:{props['wrk_cpu_val']}",
-                        "inner_height": props['exe_cpu_height'],
-                        "inner_style_bkg_clr": "#4caf50",
-                        "inner_style_text_clr": "#ffffff",
-                        "inner_title": "Driver",
-                        "inner_text": "CPU: " + props['exe_cpu_val'],
-                    })}
-                </div>
-                
-                <div style="width: 50%; display: flex; flex-direction: column; gap: 0px; height:100%; align-items:center;">
-                    <b>Memory</b>
-                    {render_cpu_process({
-                        "outer_height": props['drv_mem_height'],
-                        "outer_style_bkg_clr": "#9ac3f4",
-                        "outer_style_text_clr": "#1565c0",
-                        "outer_title": f"Master: {props['drv_mem_val']}",
-                        "inner_height": "100%",
-                        "inner_style_bkg_clr": "#1565c0",
-                        "inner_style_text_clr": "#ffffff",
-                        "inner_title": "Driver",
-                        "inner_text": "Memory: " + props['drv_mem_val'],
-                    })}
-
-
-                    {render_cpu_process({
-                        "outer_height": props['wrk_mem_height'],
-                        "outer_style_bkg_clr": "#8ff898",
-                        "outer_style_text_clr": "#4caf50",
-                        "outer_title": f"Worker: {props['wrk_mem_val']}",
-                        "inner_height": props['exe_mem_height'],
-                        "inner_style_bkg_clr": "#4caf50",
-                        "inner_style_text_clr": "#ffffff",
-                        "inner_title": "Driver",
-                        "inner_text": "Memory: " + props['exe_mem_val'],
-                    })}
-                </div>
-
-                
-            </div>
-        </div>
+        Args:
+            message: The message to log.
+            msg_type: The type of message - "info", "error", or "debug".
         """
-        self.wdg_viz_display.value = html_template
+        with self.widgets["output_area"]:
+            if msg_type == "error":
+                print(f"[ERROR] {message}")
+            elif msg_type == "debug":
+                print(f"[DEBUG] {message}")
+            else:
+                print(f"[INFO ] {message}")
 
+    def set_environment(self, b: widgets.Button) -> None:
+        """Set up the environment when the load button is clicked."""
+        self._log("Load button clicked!", "debug")
 
-    def get_framework_logo(self):
-        def _get_img_bytes(url):
-            try:
-                response = requests.get(url, timeout=5)
-                response.raise_for_status()
-                return response.content
-            except Exception as e:
-                print(f"Error loading logo: {e}")
-                return b''
-        if self.get_from_selection_framework_name() is not None:
-            logo_url = self.fw_mapping.get(self.get_from_selection_framework_name(), {}).get('logo', '')
-            img_content = _get_img_bytes(logo_url) if logo_url else b''
-            image_display = widgets.Image(
+        self._set_load_button_processing()
+
+        self.widgets["output_area"].clear_output()
+        self._log(f"Setting environment for {self.get_selected_framework_name()}...")
+
+        try:
+            self._execute_framework_setup()
+            self._update_spark_environment()
+        except Exception as e:
+            self._handle_setup_error(e)
+        finally:
+            self.widgets["load_button"].disabled = False
+            self._initialize_big_data_manager()
+
+    # =========================================================================
+    # Properties
+    # =========================================================================
+
+    @property
+    def widgets(self) -> Dict[str, Any]:
+        """Access the widget dictionary."""
+        return self._widgets
+
+    @property
+    def selected_framework(self):
+        """Get the currently selected framework configuration."""
+        fw_name = self.get_selected_framework_name()
+        return FRAMEWORK_REGISTRY[fw_name]
+
+    # =========================================================================
+    # Widget Creation Methods
+    # =========================================================================
+
+    def _create_widgets(self) -> None:
+        """Create all GUI widgets."""
+        self._widgets["header_config"] = self._create_header("Cluster Configurator")
+        self._widgets["header_viz"] = self._create_header("Resource Allocation Overview")
+
+        self._widgets["framework"] = self._create_framework_widget()
+        self._widgets["logo"] = self._create_logo_widget()
+        self._widgets["template"] = self._create_template_widget()
+        self._widgets["destination"] = self._create_destination_widget()
+        self._widgets["master_host"] = self._create_master_host_widget()
+        self._widgets["worker_hosts"] = self._create_worker_hosts_widget()
+
+        self._widgets["driver_cpu"] = self._create_driver_cpu_widget()
+        self._widgets["worker_cpu"] = self._create_worker_cpu_widget()
+        self._widgets["executor_cpu"] = self._create_executor_cpu_widget()
+
+        self._widgets["driver_memory"] = self._create_driver_memory_widget()
+        self._widgets["worker_memory"] = self._create_worker_memory_widget()
+        self._widgets["executor_memory"] = self._create_executor_memory_widget()
+
+        self._widgets["randomize_port"] = self._create_randomize_port_widget()
+        self._widgets["load_button"] = self._create_load_button()
+        self._widgets["output_area"] = widgets.Output()
+
+        self._widgets["start_cluster"] = self._create_start_cluster_button()
+        self._widgets["stop_cluster"] = self._create_stop_cluster_button()
+
+    def _create_header(self, title: str) -> widgets.HTML:
+        """Create the GUI header widget."""
+        return widgets.HTML(HTMLGenerator.generate_header(title))
+
+    def _create_framework_widget(self) -> widgets.Dropdown:
+        """Create the framework selection widget."""
+        return WidgetFactory.create_dropdown(
+            options=list(FRAMEWORK_REGISTRY.keys()),
+            value=None,
+            description="Framework:",
+        )
+
+    def _create_logo_widget(self) -> widgets.Widget:
+        """Create the framework logo display widget."""
+        try:
+            fw_name = self.get_selected_framework_name()
+            if fw_name is None:
+                return create_placeholder_logo()
+
+            logo_url = self.selected_framework.logo_url
+            img_content = fetch_image(logo_url)
+
+            return widgets.Image(
                 value=img_content,
-                format='svg+xml',
+                format="svg+xml",
                 width=100,
                 height=100,
             )
-            return image_display
-        else:
-            return widgets.HTML(value="<div style='width:100px;height:100px;background-color:#eee;display:flex;align-items:center;justify-content:center;color:#999;'>No Logo</div>")
+        except Exception as e:
+            print(f"Error loading logo: {e}")
+            return create_placeholder_logo()
 
-    def launch_gui_config(self):
-        
-        # Create GUI components
-        self.wdg_header_config = self._create_header(title="Cluster Configurator")
-
-        self.wdg_framework_name = self.get_wdg_framework_name()
-        self.wdg_image_display = self.get_framework_logo()
-        self.wdg_config_template = self.get_wdg_template()
-        self.wdg_config_destination = self.get_wdg_config_destination()
-        self.wdg_master_host = self.get_wdg_master()
-
-        self.wdg_driver_cpu = self.get_wdg_driver_cpu()
-
-        self.wdg_worker_hosts = self.get_wdg_worker()
-        self.wdg_worker_cpu = self.get_wdg_worker_cpu()
-        
-        self.wdg_executor_cpu = self.get_wdg_executor_cpu()
-        self.wdg_driver_memory = self.get_wdg_driver_memory()       
-        self.wdg_worker_memory = self.get_wdg_worker_memory()
-        self.wdg_executor_memory = self.get_wdg_executor_memory()
-        self.wdg_randomize_port = self.get_wdg_randomize_port()
-        self.wdg_load_button = self.get_wdg_load_button()
-        self.wdg_output_area = widgets.Output()
-
-        self.wdg_btn_start_cluster = self.get_wdg_btn_start_cluster()
-        self.wdg_btn_stop_cluster = self.get_wdg_btn_stop_cluster()
-
-        
-
-        self._attach_wdg_observers()
-
-
-        self.wdg_header_viz = self._create_header(title="Resource Allocation Overview")
-        trigger_widgets = [
-            self.wdg_driver_cpu,
-            self.wdg_worker_cpu,
-            self.wdg_executor_cpu,
-            self.wdg_driver_memory,
-            self.wdg_worker_memory,
-            self.wdg_executor_memory,
-        ]
-
-        for w in trigger_widgets:
-            w.observe(self.update_process_viz, names='value')
-
-        # Run once initially to show the starting state
-        self.update_process_viz()
-
-        # Assemble and display GUI
-        self.outer_layout = widgets.Layout(
-            display='flex',
-            flex_flow='row',
-            width='100%',
-            max_width='100%',
-            border='2px solid #444444',
-            border_radius='100px',
-            background_color="#ffffff",
-            overflow='hidden',
-            height="1000px"
-        )
-
-        self.config_container = widgets.VBox(
-            [
-                self.wdg_header_config,
-                self.wdg_image_display,
-                self.wdg_framework_name,
-                self.wdg_config_template,
-                self.wdg_config_destination,
-                self.wdg_master_host,
-                self.wdg_worker_hosts,
-                self.wdg_driver_cpu,
-                self.wdg_worker_cpu,
-                self.wdg_executor_cpu,
-                self.wdg_driver_memory,
-                self.wdg_worker_memory,
-                self.wdg_executor_memory,
-                self.wdg_randomize_port,
-                self.wdg_load_button,
-                self.wdg_output_area
-            ], 
-            layout = widgets.Layout(
-                width='50%', 
-                padding='20px',
-                display='flex',
-                flex_flow='column',
-                margin='10px auto',
-                align_items='stretch',
-                align_content='stretch',
-            )
-        )
-
-        self.viz_container = widgets.VBox([  
-                self.wdg_header_viz,
-                self.wdg_viz_display,
-            ], 
-            layout=widgets.Layout(
-                width='50%', 
-                padding='20px',
-                display='flex',
-                flex_flow='column',
-                margin='10px 0px',
-                align_items='stretch',
-            )
-        )
-                
-        row1 = widgets.HBox(
-            [
-                self.config_container,
-                self.viz_container,
-            ], 
-            layout= widgets.Layout(
-                display='flex',
-                flex_flow='row',
-                width='100%',
-                max_width='100%',
-                overflow='hidden',
-                height="850px"
-            )
-        )
-
-        row2 = widgets.VBox(
-            [
-                self.wdg_btn_start_cluster,
-                self.wdg_btn_stop_cluster,
-            ],
-            layout = widgets.Layout(
-                display='flex',
-                flex_flow='row',
-                width='100%',
-                max_width='100%',
-                justify_content='space-around'
-            )
-        )
-        
-        main_container = widgets.VBox([
-                row1,
-                row2
-            ],
-            layout = widgets.Layout(
-                    display='flex',
-                    flex_flow='column',
-                    width='100%',
-                    max_width='100%',
-                    border='2px solid #444444',
-                    border_radius='100px',
-                    background_color="#ffffff"
-            )
-        )
-        
-        display(main_container)
-        
-
-    def _create_header(self, title: str):
-        """Create the GUI header"""
-        return widgets.HTML(f"""
-            <div style='display: block; justify-content: center; align-items: center; gap: 10px; width: 100%;'>
-              <h2 style='color: #2196F3; text-align: center;'>{title}</h2><hr>
-            </div>
-        """)
-    
-    def make_styled_button(
-            self,
-            description,
-            style_overrides = None,
-            layout_overrides = None,
-            **button_kwargs,
-        ):
-        # Base style
-        base_style = {
-            "button_color": "#4caf50",      # green background
-            "font_weight": "bold",
-            "font_size": "14px",
-        }
-        # Base layout
-        base_layout = {
-            "width": "120px",
-            "height": "40px",
-            "margin": "5px",
-            "align_self": "center",
-        }
-
-        # Merge overrides (if any)
-        final_style = {**base_style, **(style_overrides or {})}
-        final_layout = {**base_layout, **(layout_overrides or {})}
-
-        return widgets.Button(
-            description=description,
-            style=widgets.ButtonStyle(**final_style),
-            layout=widgets.Layout(**final_layout),
-            **button_kwargs,
-        )
-
-      
-    # GUI component creation methods
-    def get_wdg_framework_name(self):
-        """Get the framework selection widget"""
-        return widgets.Dropdown(
-            options=list(self.fw_mapping.keys()),
-            # value="Select a framework",
-            description='Framework:',
-            style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_template(self):
-        """Get the template selection widget"""
-        use_default_template_chk = widgets.Checkbox(
+    def _create_template_widget(self) -> widgets.VBox:
+        """Create the template selection widget."""
+        checkbox = WidgetFactory.create_checkbox(
             value=True,
-            description='Use default template',
-            indent=False
+            description="Use default template",
         )
-        config_template = widgets.Text(
+        text = WidgetFactory.create_text(
             value="default",
-            description='Path to config template:',
-            style=self.label_style,
-            layout = self.widget_layout,
+            description="Path to config template:",
+            disabled=checkbox.value,
         )
-        config_template.disabled = use_default_template_chk.value
 
-        def _toggle_default(change):
-            config_template.disabled = change['new']
-        use_default_template_chk.observe(_toggle_default, names='value')
+        def toggle_default(change: Dict[str, Any]) -> None:
+            text.disabled = change["new"]
 
-        return widgets.VBox([use_default_template_chk, config_template])
+        checkbox.observe(toggle_default, names="value")
+        return widgets.VBox([checkbox, text])
 
-    def get_wdg_config_destination(self):
-        """Get the config destination path widget"""
-        return widgets.Text(
+    def _create_destination_widget(self) -> widgets.Text:
+        """Create the config destination path widget."""
+        return WidgetFactory.create_text(
             value=os.getcwd(),
-            description='Config destination path:',
-            style=self.label_style,
-            layout = self.widget_layout
+            description="Config destination path:",
         )
 
-    def get_wdg_master(self):
-        """Get the master host selection widget"""
-        return widgets.Dropdown(
-            options=self.slurm_info.get_nodes_list(),
-            value=self.slurm_info.get_nodes_list()[0],
-            description='Master Host:',
-            style=self.label_style,
-            layout = self.widget_layout
+    def _create_master_host_widget(self) -> widgets.Dropdown:
+        """Create the master host selection widget."""
+        nodes = self.slurm_info.get_nodes_list()
+        return WidgetFactory.create_dropdown(
+            options=nodes,
+            value=nodes[0] if nodes else None,
+            description="Master Host:",
         )
 
-    def get_wdg_worker(self):
-        """Get the worker host selection widget"""
+    def _create_worker_hosts_widget(self) -> widgets.VBox:
+        """Create the worker host selection widget."""
         node_options = self.slurm_info.get_nodes_list()
         checkboxes = [
             widgets.Checkbox(value=False, description=node, indent=False)
@@ -604,446 +243,673 @@ class GUIUtils:
 
         checkbox_container = widgets.VBox(
             checkboxes,
-            layout=widgets.Layout(max_height='200px', overflow_y='auto', border='1px solid #ddd')
+            layout=widgets.Layout(max_height="200px", overflow_y="auto", border="1px solid #ddd")
         )
 
         label = widgets.HTML(value="<b>Worker Hosts:</b>")
         selected_display = widgets.HTML(value="<i>None selected</i>")
 
-        def update_selection(change):
+        def update_selection(change: Dict[str, Any]) -> None:
             selected = [cb.description for cb in checkboxes if cb.value]
             selected_display.value = f"<b>Selected:</b> {', '.join(selected) if selected else '<i>None</i>'}"
 
         for cb in checkboxes:
-            cb.observe(update_selection, names='value')
+            cb.observe(update_selection, names="value")
 
         return widgets.VBox([label, checkbox_container, selected_display])
 
-    def get_wdg_driver_cpu(self):
-        return widgets.IntSlider(
-            value=1, min=1, max=self.slurm_info.get_cpus_per_node() - self.fw_mapping[self.get_from_selection_framework_name()]['default']['cpu_worker'],
-            description='CPUs for Driver:',
-            style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_worker_cpu(self):
-        """Get the worker CPU slider widget"""
-        return widgets.IntSlider(
-            value=1, min=1, max=self.slurm_info.get_cpus_per_node() - self.get_from_selection_driver_cpu(),
-            description='CPUs/worker:',
-                   style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_executor_cpu(self):
-        """Get the executor CPU slider widget"""
-        return widgets.IntSlider(
-            value=1, min=1, max=int(self.get_from_selection_worker_cpu()), step=1,
-            description='CPUs/executor:',
-            style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_driver_memory(self):
-        """Get the driver memory slider widget"""
-        value = self.fw_mapping[self.get_from_selection_framework_name()]['default']['mem_driver']
-        return widgets.IntSlider(
-            value=value, min=value, max=self.slurm_info.get_memory_per_node() - self.fw_mapping[self.get_from_selection_framework_name()]['default']['mem_worker'],
-            step=128,
-            description='Driver Memory (MB):',
-            style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_worker_memory(self):
-        """Get the worker memory slider widget"""
-        value = self.fw_mapping[self.get_from_selection_framework_name()]['default']['mem_driver']
-        return widgets.IntSlider(
-            value=value, min=value, max=self.slurm_info.get_memory_per_node() - self.get_from_selection_driver_memory_val(), step=128,
-            description='Memory/worker (MB):',
-            style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_executor_memory(self):
-        """Get the executor memory slider widget"""
-        value = self.fw_mapping[self.get_from_selection_framework_name()]['default']['mem_driver']
-        return widgets.IntSlider(
-            value=value, min=value, max=self.get_from_selection_worker_memory_val(), step=128,
-            description='Memory/executor (MB):',
-                        style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_randomize_port(self):
-        """Get the randomize master port checkbox widget"""
-        return widgets.Checkbox(
-            value=False,
-            description='Randomize Master Port',
-            indent=False,
-            style=self.label_style,
-            layout = self.widget_layout
-        )
-
-    def get_wdg_load_button(self):
-        """Get the load button widget"""
-        load_button = widgets.Button(
-            description='Load to Environment',
-            button_style='info',
-            layout=widgets.Layout(width='80%', margin='20px auto 0 auto',alignment='center')
-        )
-        load_button.on_click(self.set_environment)
-        return load_button
-    
-    def _toggle_btn_cluster(self, start_disabled: bool|None = None, stop_disabled: bool|None = None, all_disabled:bool|None = None):
-        if all_disabled is not None:
-            self.wdg_btn_start_cluster.disabled = all_disabled
-            self.wdg_btn_stop_cluster.disabled = all_disabled
-            return
-
-        if start_disabled is None and stop_disabled is None:
-            new_start = not self.wdg_btn_start_cluster.disabled
-            new_stop = not self.wdg_btn_stop_cluster.disabled
-            self.wdg_btn_start_cluster.disabled = new_start
-            self.wdg_btn_stop_cluster.disabled = new_stop
-            return
-        # Override, if desired
-        if start_disabled is not None:
-            self.wdg_btn_start_cluster.disabled = start_disabled
-        if stop_disabled is not None:
-            self.wdg_btn_stop_cluster.disabled = stop_disabled
-
-    def _on_start_cluster_clicked(self,_):
-        self._toggle_btn_cluster(all_disabled=True)
-        try:
-            result_startup = self.bdm.start_cluster()
-            self._last_cluster_result = result_startup
-            self._toggle_btn_cluster(start_disabled=True,stop_disabled=False)
-        except Exception as e:
-            print("Failed to start cluster:", e)
-            self._toggle_btn_cluster(start_disabled=False,stop_disabled=True)
-
-    def _on_stop_cluster_clicked(self,_):
-        self._toggle_btn_cluster(all_disabled=True)
-        try:
-            result_stop = self.bdm.stop_cluster()           
-            self._last_cluster_result = result_stop
-            self._toggle_btn_cluster(start_disabled=False,stop_disabled=True)
-        except Exception as e:
-            print("Failed to stop cluster:", e)
-            self._toggle_btn_cluster(start_disabled=True,stop_disabled=False)
+    def _create_driver_cpu_widget(self) -> widgets.IntSlider:
+        """Create the driver CPU slider widget."""
+        fw_name = self.get_selected_framework_name() or "SPARK"
+        default_cpu_worker = FRAMEWORK_REGISTRY[fw_name].default_resources.get("cpu_worker", 1)
         
-    def get_wdg_btn_start_cluster(self):
-        button = self.make_styled_button(
+        return WidgetFactory.create_slider(
+            value=1,
+            min_val=1,
+            max_val=self.slurm_info.get_cpus_per_node() - default_cpu_worker,
+            description="CPUs for Driver:",
+        )
+
+    def _create_worker_cpu_widget(self) -> widgets.IntSlider:
+        """Create the worker CPU slider widget."""
+        return WidgetFactory.create_slider(
+            value=1,
+            min_val=1,
+            max_val=self.slurm_info.get_cpus_per_node() - self.get_selected_driver_cpu(),
+            description="CPUs/worker:",
+        )
+
+    def _create_executor_cpu_widget(self) -> widgets.IntSlider:
+        """Create the executor CPU slider widget."""
+        return WidgetFactory.create_slider(
+            value=1,
+            min_val=1,
+            max_val=self.get_selected_worker_cpu(),
+            step=1,
+            description="CPUs/executor:",
+        )
+
+    def _create_driver_memory_widget(self) -> widgets.IntSlider:
+        """Create the driver memory slider widget."""
+        fw_name = self.get_selected_framework_name() or "SPARK"
+        default_resources = FRAMEWORK_REGISTRY[fw_name].default_resources
+        value = default_resources.get("mem_driver", 1000)
+        mem_worker = default_resources.get("mem_worker", 1000)
+
+        return WidgetFactory.create_slider(
+            value=value,
+            min_val=value,
+            max_val=self.slurm_info.get_memory_per_node() - mem_worker,
+            step=128,
+            description="Driver Memory (MB):",
+        )
+
+    def _create_worker_memory_widget(self) -> widgets.IntSlider:
+        """Create the worker memory slider widget."""
+        fw_name = self.get_selected_framework_name() or "SPARK"
+        value = FRAMEWORK_REGISTRY[fw_name].default_resources.get("mem_driver", 1000)
+
+        return WidgetFactory.create_slider(
+            value=value,
+            min_val=value,
+            max_val=self.slurm_info.get_memory_per_node() - self.get_selected_driver_memory_val(),
+            step=128,
+            description="Memory/worker (MB):",
+        )
+
+    def _create_executor_memory_widget(self) -> widgets.IntSlider:
+        """Create the executor memory slider widget."""
+        fw_name = self.get_selected_framework_name() or "SPARK"
+        value = FRAMEWORK_REGISTRY[fw_name].default_resources.get("mem_driver", 1000)
+
+        return WidgetFactory.create_slider(
+            value=value,
+            min_val=value,
+            max_val=self.get_selected_worker_memory_val(),
+            step=128,
+            description="Memory/executor (MB):",
+        )
+
+    def _create_randomize_port_widget(self) -> widgets.Checkbox:
+        """Create the randomize port checkbox widget."""
+        return WidgetFactory.create_checkbox(
+            value=False,
+            description="Randomize Master Port",
+        )
+
+    def _create_load_button(self) -> widgets.Button:
+        """Create the load button widget."""
+        button = widgets.Button(
+            description="Load to Environment",
+            button_style="info",
+            layout=widgets.Layout(width="80%", margin="20px auto 0 auto", alignment="center"),
+        )
+        button.on_click(self.set_environment)
+        return button
+
+    def _create_start_cluster_button(self) -> widgets.Button:
+        """Create the start cluster button widget."""
+        button = WidgetFactory.create_styled_button(
             description="Start Cluster",
-            layout_overrides={'width':"40%",'color':'white'}
-            )
-        button.disabled = not self.is_config_set # Enable only when all the parameters are set
+            layout_overrides={"width": "40%", "color": "white"},
+        )
+        button.disabled = not self.is_config_set
         button.on_click(self._on_start_cluster_clicked)
         return button
-    
-    def get_wdg_btn_stop_cluster(self):
-        button = self.make_styled_button(
+
+    def _create_stop_cluster_button(self) -> widgets.Button:
+        """Create the stop cluster button widget."""
+        button = WidgetFactory.create_styled_button(
             description="Stop Cluster",
-            style_overrides={'button_color':'red','color':'white'},
-            layout_overrides={'width':"40%"}
-            )
-        button.disabled = not self.is_config_set # Enable only when all the parameters are set
+            style_overrides={"button_color": "red", "color": "white"},
+            layout_overrides={"width": "40%"},
+        )
+        button.disabled = not self.is_config_set
         button.on_click(self._on_stop_cluster_clicked)
         return button
 
-    # Widget observers
-    def _on_change_parameters_load_button(self,change):
-        self.wdg_load_button.button_style = "warning"
-        self.wdg_load_button.description = "⟳ Apply Changes"
-        self.wdg_output_area.clear_output()
-        self.is_config_set = False # Need to click on load if any changes happened
-        
-    def _attach_wdg_observers(self):
+    # =========================================================================
+    # Event Handlers
+    # =========================================================================
+
+    def _attach_widget_observers(self) -> None:
+        """Attach observers to widgets for interactivity."""
         observable_widgets = [
-            self.wdg_config_template, self.wdg_config_destination,
-            self.wdg_master_host, self.wdg_worker_hosts,
-            self.wdg_driver_cpu, self.wdg_worker_cpu, self.wdg_executor_cpu,
-            self.wdg_driver_memory, self.wdg_worker_memory, self.wdg_executor_memory,
-            self.wdg_randomize_port,
+            self.widgets["logo"],
+            self.widgets["template"],
+            self.widgets["destination"],
+            self.widgets["master_host"],
+            self.widgets["worker_hosts"],
+            self.widgets["driver_cpu"],
+            self.widgets["worker_cpu"],
+            self.widgets["executor_cpu"],
+            self.widgets["driver_memory"],
+            self.widgets["worker_memory"],
+            self.widgets["executor_memory"],
+            self.widgets["randomize_port"],
         ]
+
         for widget in observable_widgets:
-            widget.observe(self._on_change_parameters_load_button, names="value")
+            widget.observe(self._on_parameters_changed, names="value")
 
-        self.wdg_worker_cpu.max = self.slurm_info.get_cpus_per_node() - self.get_from_selection_driver_cpu()
-        self.wdg_driver_cpu.observe(self.update_wdg_worker_cpu_range, names='value')
+        # Set up dynamic range updates
+        self._setup_dynamic_ranges()
 
-        self.wdg_executor_cpu.max = self.wdg_worker_cpu.value
-        self.wdg_worker_cpu.observe(self.update_wdg_executor_cpu_range, names='value')
+    def _setup_dynamic_ranges(self) -> None:
+        """Set up dynamic widget range interdependencies."""
+        # CPU ranges
+        self.widgets["worker_cpu"].max = (
+            self.slurm_info.get_cpus_per_node() - self.get_selected_driver_cpu()
+        )
+        self.widgets["driver_cpu"].observe(self._update_worker_cpu_range, names="value")
 
-        self.wdg_worker_memory.max = self.slurm_info.get_memory_per_node() - self.get_from_selection_driver_memory_val()
-        self.wdg_driver_memory.observe(self.update_wdg_worker_memory_max, names='value')
-        self.wdg_worker_memory.observe(self.update_wdg_executor_memory_max, names='value')
+        self.widgets["executor_cpu"].max = self.widgets["worker_cpu"].value
+        self.widgets["worker_cpu"].observe(self._update_executor_cpu_range, names="value")
 
-    def update_wdg_worker_cpu_range(self, change):
-        new_driver_cpu_val = change['new']
-        self.wdg_worker_cpu.max = self.slurm_info.get_cpus_per_node() - new_driver_cpu_val
+        # Memory ranges
+        self.widgets["worker_memory"].max = (
+            self.slurm_info.get_memory_per_node() - self.get_selected_driver_memory_val()
+        )
+        self.widgets["driver_memory"].observe(self._update_worker_memory_max, names="value")
+        self.widgets["worker_memory"].observe(self._update_executor_memory_max, names="value")
 
-    def update_wdg_executor_cpu_range(self, change):
-        new_worker_cpu_val = change['new']
-        self.wdg_executor_cpu.max = new_worker_cpu_val
+    def _setup_visualization_triggers(self) -> None:
+        """Set up widgets that trigger visualization updates."""
+        trigger_widgets = [
+            self.widgets["driver_cpu"],
+            self.widgets["worker_cpu"],
+            self.widgets["executor_cpu"],
+            self.widgets["driver_memory"],
+            self.widgets["worker_memory"],
+            self.widgets["executor_memory"],
+        ]
 
-    def update_wdg_worker_memory_max(self, change):
-        new_driver_memory_val = change['new']
-        self.wdg_worker_memory.max = self.slurm_info.get_memory_per_node() - new_driver_memory_val
-    
-    def update_wdg_executor_memory_max(self, change):
-        new_worker_memory_val = change['new']
-        self.wdg_executor_memory.max = new_worker_memory_val
-    
-    # Value extraction methods
-    def get_from_selection_framework_name(self):
-        """Get the selected framework name"""
-        return self.wdg_framework_name.value
-    
-    def get_from_selection_workers(self):
-        """Get the selected worker hosts"""
-        return [cb.description for cb in self.wdg_worker_hosts.children[1].children if cb.value]
+        for widget in trigger_widgets:
+            widget.observe(self.update_process_viz, names="value")
 
-    def get_from_selection_master_port(self):
-        """Get the selected master port"""
-        if self.wdg_randomize_port.value:
-            port = str(self.find_first_available_port(start_port=7077))
-        else:
-            port = "7077"
-        return port
+        # Initial visualization
+        self.update_process_viz()
 
-    def get_from_selection_master_host(self):
-        """Get the selected master host"""
-        return self.wdg_master_host.value
+    def _on_parameters_changed(self, change: Dict[str, Any]) -> None:
+        """Handle parameter changes."""
+        self.widgets["load_button"].button_style = "warning"
+        self.widgets["load_button"].description = "⟳ Apply Changes"
+        self.widgets["output_area"].clear_output()
+        self.is_config_set = False
 
-    def get_from_selection_driver_cpu(self):
-        """Get the selected driver CPU"""
-        return self.wdg_driver_cpu.value
+    def _update_worker_cpu_range(self, change: Dict[str, Any]) -> None:
+        """Update worker CPU range based on driver CPU."""
+        self.widgets["worker_cpu"].max = self.slurm_info.get_cpus_per_node() - change["new"]
 
-    def get_from_selection_worker_cpu(self):
-        """Get the selected worker CPU"""
-        return self.wdg_worker_cpu.value
+    def _update_executor_cpu_range(self, change: Dict[str, Any]) -> None:
+        """Update executor CPU range based on worker CPU."""
+        self.widgets["executor_cpu"].max = change["new"]
 
-    def get_from_selection_worker_memory_val(self):
-        """Get the selected worker memory in integer format for calculations"""
-        return int(self.wdg_worker_memory.value)
+    def _update_worker_memory_max(self, change: Dict[str, Any]) -> None:
+        """Update worker memory max based on driver memory."""
+        self.widgets["worker_memory"].max = (
+            self.slurm_info.get_memory_per_node() - change["new"]
+        )
 
-    def get_from_selection_worker_memory(self):
-        """Get the selected worker memory"""
-        return f"{self.get_from_selection_worker_memory_val()}m"
+    def _update_executor_memory_max(self, change: Dict[str, Any]) -> None:
+        """Update executor memory max based on worker memory."""
+        self.widgets["executor_memory"].max = change["new"]
 
-    def get_from_selection_executor_cpu(self):
-        """Get the selected executor CPU"""
-        return self.wdg_executor_cpu.value
+    def _on_start_cluster_clicked(self, _: widgets.Button) -> None:
+        """Handle start cluster button click."""
+        self._toggle_cluster_buttons(all_disabled=True)
+        try:
+            self._last_cluster_result = self.bdm.start_cluster()
+            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+        except Exception as e:
+            print("Failed to start cluster:", e)
+            self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
 
-    def get_from_selection_executor_memory_val(self):
-        """Get the selected executor memory in integer format for calculations"""
-        return int(self.wdg_executor_memory.value)
+    def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
+        """Handle stop cluster button click."""
+        self._toggle_cluster_buttons(all_disabled=True)
+        try:
+            self._last_cluster_result = self.bdm.stop_cluster()
+            self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
+        except Exception as e:
+            print("Failed to stop cluster:", e)
+            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
 
-    def get_from_selection_executor_memory(self):
-        """Get the selected executor memory"""
-        return f"{self.get_from_selection_executor_memory_val()}m"
+    def _toggle_cluster_buttons(
+        self,
+        start_disabled: Optional[bool] = None,
+        stop_disabled: Optional[bool] = None,
+        all_disabled: Optional[bool] = None,
+    ) -> None:
+        """Toggle cluster button states."""
+        if all_disabled is not None:
+            self.widgets["start_cluster"].disabled = all_disabled
+            self.widgets["stop_cluster"].disabled = all_disabled
+            return
 
-    def get_from_selection_driver_memory_val(self):
-        """Get the selected driver memory in integer format for calculations"""
-        return int(self.wdg_driver_memory.value)
+        if start_disabled is not None:
+            self.widgets["start_cluster"].disabled = start_disabled
+        if stop_disabled is not None:
+            self.widgets["stop_cluster"].disabled = stop_disabled
 
-    def get_from_selection_driver_memory(self):
-        """Get the selected driver memory"""
-        return f"{self.get_from_selection_driver_memory_val()}m"
+    # =========================================================================
+    # GUI Assembly
+    # =========================================================================
 
-    def get_from_selection_config_destination(self):
-        """Get the selected config destination path"""
-        config_destination = os.path.join(self.wdg_config_destination.value, self.get_from_selection_framework_name().lower())
-        #print(f"DEBUG: Config destination path set to {config_destination}")
-        return config_destination
+    def _assemble_and_display_gui(self) -> None:
+        """Assemble and display the complete GUI."""
+        config_container = self._create_config_container()
+        viz_container = self._create_viz_container()
 
-    def get_from_selection_config_template(self):
-        """Get the selected config template path"""
-        default_true = self.wdg_config_template.children[0].value
-        if default_true:
-            return os.environ.get(f"{self.get_from_selection_framework_name().upper()}_CONF_TEMPLATE")
-        else:
-            return self.wdg_config_template.children[1].value
-        
+        row1 = widgets.HBox(
+            [config_container, viz_container],
+            layout=widgets.Layout(
+                display="flex",
+                flex_flow="row",
+                width="100%",
+                max_width="100%",
+                overflow="hidden",
+                height="850px",
+            ),
+        )
 
-    def get_from_selection_local_dirs(self):
-        """Get the selected local directories"""
+        row2 = widgets.VBox(
+            [self.widgets["start_cluster"], self.widgets["stop_cluster"]],
+            layout=widgets.Layout(
+                display="flex",
+                flex_flow="row",
+                width="100%",
+                max_width="100%",
+                justify_content="space-around",
+            ),
+        )
+
+        main_container = widgets.VBox(
+            [row1, row2,self.widgets["output_area"]],
+            layout=widgets.Layout(
+                display="flex",
+                flex_flow="column",
+                width="100%",
+                max_width="100%",
+                border="2px solid #444444",
+                border_radius="100px",
+                background_color="#ffffff",
+            ),
+        )
+
+        display(main_container)
+
+    def _create_config_container(self) -> widgets.VBox:
+        """Create the configuration panel container."""
+        config_widgets = [
+            self.widgets["header_config"],
+            self.widgets["logo"],
+            self.widgets["framework"],
+            self.widgets["template"],
+            self.widgets["destination"],
+            self.widgets["master_host"],
+            self.widgets["worker_hosts"],
+            self.widgets["driver_cpu"],
+            self.widgets["worker_cpu"],
+            self.widgets["executor_cpu"],
+            self.widgets["driver_memory"],
+            self.widgets["worker_memory"],
+            self.widgets["executor_memory"],
+            self.widgets["randomize_port"],
+            self.widgets["load_button"],
+            
+        ]
+
+        return widgets.VBox(
+            config_widgets,
+            layout=widgets.Layout(
+                width="50%",
+                padding="20px",
+                display="flex",
+                flex_flow="column",
+                margin="10px auto",
+                align_items="stretch",
+                align_content="stretch",
+            ),
+        )
+
+    def _create_viz_container(self) -> widgets.VBox:
+        """Create the visualization panel container."""
+        return widgets.VBox(
+            [self.widgets["header_viz"], self.wdg_viz_display],
+            layout=widgets.Layout(
+                width="50%",
+                padding="20px",
+                display="flex",
+                flex_flow="column",
+                margin="10px 0px",
+                align_items="stretch",
+            ),
+        )
+
+    # =========================================================================
+    # Value Getters
+    # =========================================================================
+
+    def get_selected_framework_name(self) -> Optional[str]:
+        """Get the selected framework name."""
+        return self.widgets["framework"].value
+
+    def get_selected_workers(self) -> List[str]:
+        """Get the selected worker hosts."""
+        worker_widget = self.widgets["worker_hosts"]
+        checkboxes = worker_widget.children[1].children
+        return [cb.description for cb in checkboxes if cb.value]
+
+    def get_selected_master_port(self) -> str:
+        """Get the selected master port."""
+        if self.widgets["randomize_port"].value:
+            return str(self._find_first_available_port(start_port=7077))
+        return str(self.selected_framework.default_master_port)
+
+    def get_selected_master_host(self) -> str:
+        """Get the selected master host."""
+        return self.widgets["master_host"].value
+
+    def get_selected_driver_cpu(self) -> int:
+        """Get the selected driver CPU."""
+        return self.widgets["driver_cpu"].value
+
+    def get_selected_worker_cpu(self) -> int:
+        """Get the selected worker CPU."""
+        return self.widgets["worker_cpu"].value
+
+    def get_selected_worker_memory_val(self) -> int:
+        """Get the selected worker memory value (integer)."""
+        return int(self.widgets["worker_memory"].value)
+
+    def get_selected_worker_memory(self) -> str:
+        """Get the selected worker memory with 'm' suffix."""
+        return f"{self.get_selected_worker_memory_val()}m"
+
+    def get_selected_executor_cpu(self) -> int:
+        """Get the selected executor CPU."""
+        return self.widgets["executor_cpu"].value
+
+    def get_selected_executor_memory_val(self) -> int:
+        """Get the selected executor memory value (integer)."""
+        return int(self.widgets["executor_memory"].value)
+
+    def get_selected_executor_memory(self) -> str:
+        """Get the selected executor memory with 'm' suffix."""
+        return f"{self.get_selected_executor_memory_val()}m"
+
+    def get_selected_driver_memory_val(self) -> int:
+        """Get the selected driver memory value (integer)."""
+        return int(self.widgets["driver_memory"].value)
+
+    def get_selected_driver_memory(self) -> str:
+        """Get the selected driver memory with 'm' suffix."""
+        return f"{self.get_selected_driver_memory_val()}m"
+
+    def get_selected_config_destination(self) -> str:
+        """Get the selected config destination path."""
+        dest = self.widgets["destination"].value
+        fw_name = self.get_selected_framework_name()
+        return os.path.join(dest, fw_name.lower())
+
+    def is_default_config_template(self) -> bool:
+        template_widget = self.widgets["template"]
+        return template_widget.children[0].value
+
+    def get_selected_config_template(self) -> str:
+        """Get the selected config template path."""
+        template_widget = self.widgets["template"]
+        use_default = template_widget.children[0].value
+
+        if use_default:
+            fw_name = self.get_selected_framework_name()
+            return os.environ.get(f"{fw_name}_CONF_TEMPLATE", "")
+        return template_widget.children[1].value
+
+    def get_selected_local_dirs(self) -> str:
+        """Get the selected local directories."""
         return f"/tmp/{self.user}/cluster-conf-{self.slurm_info.job_id}/spark/local"
 
-    def get_from_selection_worker_dir(self):
-        """Get the selected worker directory"""
+    def get_selected_worker_dir(self) -> str:
+        """Get the selected worker directory."""
         return f"/tmp/{self.user}/cluster-conf-{self.slurm_info.job_id}/spark/work"
 
-    def get_from_selection_log_dir(self):
-        """Get the selected log directory"""
-        return f"{self.get_from_selection_config_destination()}/log"
+    def get_selected_log_dir(self) -> str:
+        """Get the selected log directory."""
+        return f"{self.get_selected_config_destination()}/log"
 
-    def get_from_selection_pid_dir(self):
-        """Get the selected PID directory"""
-        return f"{self.get_from_selection_config_destination()}/pid"
+    def get_selected_pid_dir(self) -> str:
+        """Get the selected PID directory."""
+        return f"{self.get_selected_config_destination()}/pid"
 
-    # Environment update methods
-    def update_env_file(self):
-        """Update the environment file"""
-        if self.get_from_selection_framework_name() == "SPARK":
-            file_path = os.path.join(self.get_from_selection_config_destination(), "spark-env.sh")
+    # =========================================================================
+    # Visualization Helpers
+    # =========================================================================
 
-            with open(file_path, 'r') as f:
-                content = f.read()
+    def _get_viz_proportions(self) -> Dict[str, str]:
+        """Calculate visualization proportions for resources."""
+        # Get resource values
+        drv_mem = float(self.get_selected_driver_memory_val())
+        wrk_mem = float(self.get_selected_worker_memory_val())
+        exe_mem = float(self.get_selected_executor_memory_val())
 
-            for var_name, new_value in self.env_updates.items():
-                escaped_var = re.escape(var_name)
-                replacement = f'export {var_name}="{new_value}"'
+        drv_cpu = float(self.get_selected_driver_cpu())
+        wrk_cpu = float(self.get_selected_worker_cpu())
+        exe_cpu = float(self.get_selected_executor_cpu())
 
-                active_pattern = rf"^\s*export\s+\b{escaped_var}\b.*$"
-                comment_pattern = rf"^[\s#\-]+(?:export\s+)?\b{escaped_var}\b.*$"
+        # Get node capacities
+        node_mem_capacity = self.slurm_info.get_memory_per_node()
+        node_cpu_capacity = self.slurm_info.get_cpus_per_node()
 
-                if re.search(active_pattern, content, flags=re.MULTILINE):
-                    content = re.sub(active_pattern, replacement, content, flags=re.MULTILINE)
-                elif re.search(comment_pattern, content, flags=re.MULTILINE):
-                    content = re.sub(comment_pattern, replacement, content, count=1, flags=re.MULTILINE)
-                else:
-                    if content and not content.endswith('\n'):
-                        content += '\n'
-                    content += f'{replacement}\n'
+        # Calculate heights
+        master_mem_height = max((drv_mem / node_mem_capacity) * 100,25)
+        worker_mem_height = max((wrk_mem / node_mem_capacity) * 100,25)
+        executor_mem_height = max((exe_mem / wrk_mem) * 100, 25)# (exe_mem / wrk_mem) * 100 if wrk_mem > 0 else 0
 
-                os.environ[str(var_name).strip()] = str(new_value).strip()
+        master_cpu_height = max((drv_cpu / node_cpu_capacity) * 100, 25)
+        worker_cpu_height = max((wrk_cpu / node_cpu_capacity) * 100, 25)
+        executor_cpu_height = max((exe_cpu / wrk_cpu) * 100, 25) if wrk_cpu > 0 else 0
 
-            with open(file_path, 'w') as f:
-                f.write(content)
+        return {
+            "total_mem": "100%",
+            "drv_mem_height": f"{master_mem_height:.1f}%",
+            "wrk_mem_height": f"{worker_mem_height:.1f}%",
+            "exe_mem_height": f"{executor_mem_height:.1f}%",
+            "total_mem_val": f"{int(node_mem_capacity)}MB",
+            "drv_mem_val": f"{int(drv_mem)}MB",
+            "wrk_mem_val": f"{int(wrk_mem)}MB",
+            "exe_mem_val": f"{int(exe_mem)}MB",
+            "total_cpu_height": "100%",
+            "drv_cpu_height": f"{master_cpu_height:.1f}%",
+            "wrk_cpu_height": f"{worker_cpu_height:.1f}%",
+            "exe_cpu_height": f"{executor_cpu_height:.1f}%",
+            "total_cpu_val": f"{int(node_cpu_capacity)}",
+            "drv_cpu_val": f"{int(drv_cpu)}",
+            "wrk_cpu_val": f"{int(wrk_cpu)}",
+            "exe_cpu_val": f"{int(exe_cpu)}",
+        }
 
-    def update_worker_file(self):
-        """Update the worker file"""
-        worker_file_path = os.path.join(self.get_from_selection_config_destination(), self.fw_mapping[self.get_from_selection_framework_name()]["worker_file"])
-        with open(worker_file_path, 'w') as f:
-            for node in self.get_from_selection_workers():
+    # =========================================================================
+    # Environment Setup
+    # =========================================================================
+
+    def _set_load_button_processing(self) -> None:
+        """Set load button to processing state."""
+        self.widgets["load_button"].disabled = True
+        self.widgets["load_button"].description = "Processing..."
+        self.widgets["load_button"].button_style = "warning"
+    
+    def _set_default_fw_config_template(self) -> None:
+        fw_name = self.get_selected_framework_name()
+        os.environ[f"{fw_name}_CONF_TEMPLATE"]= FRAMEWORK_REGISTRY[fw_name.upper()].default_template
+    
+    def _execute_framework_setup(self) -> None:
+        """Execute the bash command to set up the framework."""
+        self._set_default_fw_config_template()
+
+        fw_name = shlex.quote(self.get_selected_framework_name().lower())
+        template = shlex.quote(self.get_selected_config_template())
+        dest = shlex.quote(
+            str(self.get_selected_config_destination()).replace(
+                self.get_selected_framework_name().lower(), ""
+            )
+        )
+
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        bash_command = (
+            f"cd {script_dir} && source framework-configure.sh "
+            f"--framework {fw_name} "
+            f"--template {template} "
+            f"--destination {dest} "
+            f"&& env | grep {fw_name} || true"
+        )
+
+        start_time = time.time()
+        res = run_bash_command(bash_command, shell=True, timeout=6000)
+       
+        elapsed = time.time() - start_time
+        self._log(f"Time elapsed for config init: {elapsed:.2f} seconds","debug")
+
+        if res.returncode != 0:
+            self._set_load_button_failed()
+            self._log("Bash script failed with exit code {res.returncode}.\nError: {res.stderr}","error")
+            raise RuntimeError(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}")
+
+        # Update environment variables
+        for line in res.stdout.splitlines():
+            if "=" in line:
+                key, value = line.strip().split("=", 1)
+                os.environ[str(key).strip()] = str(value).strip()
+
+    def _update_spark_environment(self) -> None:
+        """Update Spark environment configuration."""
+        if self.get_selected_framework_name() != "SPARK":
+            return
+
+        try:
+            env_updates = self._build_spark_env_updates()
+            self._update_env_file(env_updates)
+            self._update_worker_file()
+
+            self._set_load_button_success()
+            self._log(f"Environment updated for {self.get_selected_framework_name()}!","info")
+            self.is_config_set = True
+            self._toggle_cluster_buttons(start_disabled=False)
+
+        except Exception as e:
+            self._handle_setup_error(e)
+
+    def _build_spark_env_updates(self) -> Dict[str, str]:
+        """Build Spark environment variable updates."""
+        return {
+            "SPARK_MASTER_HOST": self.get_selected_master_host(),
+            "SPARK_WORKER_CORES": str(self.get_selected_worker_cpu()),
+            "SPARK_WORKER_MEMORY": self.get_selected_worker_memory(),
+            "SPARK_EXECUTOR_CORES": str(self.get_selected_executor_cpu()),
+            "SPARK_EXECUTOR_MEMORY": self.get_selected_executor_memory(),
+            "SPARK_DRIVER_MEMORY": self.get_selected_driver_memory(),
+            "SPARK_LOCAL_DIRS": self.get_selected_local_dirs(),
+            "SPARK_WORKER_DIR": self.get_selected_worker_dir(),
+            "SPARK_CONF_DIR": self.get_selected_config_destination(),
+            "SPARK_LOG_DIR": self.get_selected_log_dir(),
+            "SPARK_PID_DIR": self.get_selected_pid_dir(),
+            "SPARK_MASTER_PORT": self.get_selected_master_port(),
+            #"PYSPARK_PYTHON": os.environ.get("PYSPARK_PYTHON", sys.executable),
+        }
+
+    def _update_env_file(self, env_updates: Dict[str, str]) -> None:
+        """Update the Spark environment file."""
+        file_path = os.path.join(
+            self.get_selected_config_destination(), "spark-env.sh"
+        )
+
+        with open(file_path, "r") as f:
+            content = f.read()
+
+        for var_name, new_value in env_updates.items():
+            escaped_var = re.escape(var_name)
+            replacement = f'export {var_name}="{new_value}"'
+
+            active_pattern = rf"^\s*export\s+\b{escaped_var}\b.*$"
+            comment_pattern = rf"^[\s#\-]+(?:export\s+)?\b{escaped_var}\b.*$"
+
+            if re.search(active_pattern, content, flags=re.MULTILINE):
+                content = re.sub(active_pattern, replacement, content, flags=re.MULTILINE)
+            elif re.search(comment_pattern, content, flags=re.MULTILINE):
+                content = re.sub(comment_pattern, replacement, content, count=1, flags=re.MULTILINE)
+            else:
+                if content and not content.endswith("\n"):
+                    content += "\n"
+                content += f"{replacement}\n"
+
+            os.environ[str(var_name).strip()] = str(new_value).strip()
+
+        with open(file_path, "w") as f:
+            f.write(content)
+
+    def _update_worker_file(self) -> None:
+        """Update the Spark worker file."""
+        worker_file_path = os.path.join(
+            self.get_selected_config_destination(),
+            FRAMEWORK_REGISTRY[self.get_selected_framework_name()].worker_file,
+        )
+        with open(worker_file_path, "w") as f:
+            for node in self.get_selected_workers():
                 f.write(f"{node}\n")
 
-    def find_first_available_port(self, start_port=8000, end_port=9000, host=socket.gethostname()):
-        """Find the first available port"""
+    def _handle_setup_error(self, error: Exception) -> None:
+        """Handle setup errors."""
+        print(f"FATAL ERROR: {str(error)}")
+        tb = traceback.format_exc()
+        print(tb)
+        self._set_load_button_failed()
+        self.is_config_set = False
+        self._toggle_cluster_buttons(all_disabled=False)
+
+    def _set_load_button_success(self) -> None:
+        """Set load button to success state."""
+        button = self.widgets["load_button"]
+        button.button_style = "success"
+        button.description = "Success!"
+        button.disabled = False
+
+    def _set_load_button_failed(self) -> None:
+        """Set load button to failed state."""
+        button = self.widgets["load_button"]
+        button.button_style = "danger"
+        button.description = "Failed"
+
+    def _initialize_big_data_manager(self) -> None:
+        """Initialize the BigDataManager with user input."""
+        self.bdm.initialize_user_input({
+            "fw_name": self.get_selected_framework_name(),
+            "master": self.get_selected_master_host(),
+            "workers": self.get_selected_workers(),
+            "master_port": self.get_selected_master_port(),
+            "conf_dir": self.get_selected_config_destination(),
+            "log_dir": self.get_selected_log_dir(),
+            "fw_mapping": FRAMEWORK_REGISTRY,
+        })
+
+    # =========================================================================
+    # Utility Methods
+    # =========================================================================
+
+    def _find_first_available_port(
+        self,
+        start_port: int = 7077,
+        end_port: int = 9000,
+        host: Optional[str] = None,
+    ) -> int:
+        """Find the first available port in the given range."""
+        host = host or socket.gethostname()
         for port in range(start_port, end_port + 1):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 try:
-                    s.bind((host, port))
+                    sock.bind((host, port))
                     return port
                 except OSError:
                     continue
-
-        raise RuntimeError("No available ports found in the specified range.")
-
-    def set_environment(self, b):
-        """Set the environment"""
-
-        print("DEBUG: Load button clicked!")
-        
-        self.wdg_load_button.disabled = True
-        self.wdg_load_button.description = "Processing..."
-        self.wdg_load_button.button_style = 'warning'
-        
-        with self.wdg_output_area:
-            clear_output()
-            print(f"Setting environment for {self.get_from_selection_framework_name()}...")
-
-            fw_name_safe = shlex.quote(self.get_from_selection_framework_name().lower())
-            template_safe = shlex.quote(self.get_from_selection_config_template())
-            dest_safe = shlex.quote(str(self.get_from_selection_config_destination().replace(self.get_from_selection_framework_name().lower(), "")))
-            
-            bash_command = [
-                "source framework-configure.sh",
-                "--framework", f"{fw_name_safe}",
-                "--template", f"{template_safe}",
-                "--destination", f"{dest_safe}",
-                f"&& env | grep {fw_name_safe} || true"
-            ]
-            bash_command = " ".join(bash_command)
-
-            try:
-                # output = subprocess.run(
-                #     bash_command,
-                #     shell=True,
-                #     check=True,
-                #     text=True,
-                #     capture_output=True,
-                #     executable='/bin/bash'
-                # )
-                
-                start_time = time.time()    
-                output, error, return_code = run_bash_command(bash_command,shell=True, timeout=6000)  # Log the command being run    
-                end_time = time.time()
-                print(f"DEBUG:Time elapsed for config init: {end_time - start_time} seconds")
-
-                if return_code != 0:
-                    print(f" FATAL ERROR: {error}")
-                    self.wdg_load_button.button_style = 'danger'
-                    self.wdg_load_button.description = "Failed"
-                    self.wdg_load_button.disabled = False
-                    raise RuntimeError(f"Bash script failed with exit code {return_code}.\nError output: {error}")
-                
-                for line in output.splitlines():
-                    if '=' in line:
-                        key, value = line.strip().split('=', 1)
-                        os.environ[str(key).strip()] = str(value).strip()
-
-            # except subprocess.CalledProcessError as e:
-            #     print(f" FATAL ERROR: {str(e)}")
-            #     self.wdg_load_button.button_style = 'danger'
-            #     self.wdg_load_button.description = "Failed"
-            #     error_msg = f"Bash script failed with exit code {e.returncode}.\nError output: {e.stderr}"
-            #     raise RuntimeError(error_msg)
-            finally:
-                self.wdg_load_button.disabled = False
-
-            try:
-                # if not self.wdg_config_template.children[0].value:
-                #     self.wdg_config_template.children[1].value = os.environ.get(f"{self.fw_name.upper()}_CONF_TEMPLATE")
-
-                if self.get_from_selection_framework_name() == "SPARK":
-                    self.env_updates = {
-                        'SPARK_MASTER_HOST': self.get_from_selection_master_host(),
-                        'SPARK_WORKER_CORES': self.get_from_selection_worker_cpu(),
-                        'SPARK_WORKER_MEMORY': self.get_from_selection_worker_memory(),
-                        'SPARK_EXECUTOR_CORES': self.get_from_selection_executor_cpu(),
-                        'SPARK_EXECUTOR_MEMORY': self.get_from_selection_executor_memory(),
-                        'SPARK_DRIVER_MEMORY': self.get_from_selection_driver_memory(),
-                        'SPARK_LOCAL_DIRS': self.get_from_selection_local_dirs(),
-                        'SPARK_WORKER_DIR': self.get_from_selection_worker_dir(),
-                        'SPARK_CONF_DIR': self.get_from_selection_config_destination(),
-                        'SPARK_LOG_DIR': self.get_from_selection_log_dir(),
-                        'SPARK_PID_DIR': self.get_from_selection_pid_dir(),
-                        'SPARK_MASTER_PORT': self.get_from_selection_master_port(),
-                        'PYSPARK_PYTHON': os.environ.get('PYSPARK_PYTHON', sys.executable)
-                    }
-                    self.update_env_file()
-                    self.update_worker_file()
-                    print(f" Environment Updated for {self.get_from_selection_framework_name()}!")
-                    
-                    self.wdg_load_button.button_style = 'success'
-                    self.wdg_load_button.description = "Success!"
-                    self.wdg_load_button.disabled = False
-
-                    self.is_config_set = True
-                    self._toggle_btn_cluster(start_disabled=False)
-            except Exception as e:
-                print(f" FATAL ERROR: {str(e)}")
-                tb = traceback.format_exc()
-                print(tb)
-                self.wdg_load_button.button_style = 'danger'
-                self.wdg_load_button.description = "Failed"
-
-                self.is_config_set = False
-                self._toggle_btn_cluster(all_disabled=False)
-            finally:
-                self.wdg_load_button.disabled = False
-                self.bdm.initialize_user_input({
-                    'fw_name': self.get_from_selection_framework_name(),
-                    'master': self.get_from_selection_master_host(),
-                    'workers': self.get_from_selection_workers(),
-                    'master_port': self.get_from_selection_master_port(),
-                    'conf_dir': self.get_from_selection_config_destination(),
-                    'log_dir': self.get_from_selection_log_dir(),
-                    'fw_mapping':self.fw_mapping
-                })
-                
+        raise RuntimeError(f"No available ports found in range {start_port}-{end_port}")

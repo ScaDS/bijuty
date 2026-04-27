@@ -4,7 +4,13 @@ setup(
     name="big_data_utils",
     version="0.1.0",
     packages=find_packages(),
-    install_requires=[], # TODO
+    install_requires=[
+        "ipywidgets>=8.0.0",
+        "ipython>=8.0.0",
+        "psutil>=5.9.0",
+        "requests>=2.28.0",
+        "plotly>=5.0.0",
+    ],
     author="Apurv Deepak Kulkarni",
     author_email="your.email@example.com",
     description="A simple Python module contianing tools to setup big data framework environment in jupyterhub.",

@@ -1,0 +1,67 @@
+# Define the root logger with appender file
+#pattern = [%d{yyyy-MM-dd HH:mm:ss,SSS}] [%p] - %m%n
+#pattern = %d{ISO8601},%m%n
+#pattern=%d{yyyy-MM-dd HH:mm:ss,SSS},%m%n
+property.pattern = %d{yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'},%m%n
+
+rootLogger.level = debug
+rootLogger.appenderRefs = stdout
+#rootLogger.appenderRef.stdout.ref = STDOUT
+
+##log4j.rootLogger=DEBUG,CONSOLE
+#appenders = CONSOLE, throughput, latency
+### Define the stdout appender
+#appender.console.type=Console
+#appender.console.name=console
+#appender.console.layout.type=PatternLayout
+#appender.console.layout.pattern=[%d{ISO8601}] %p %c{1} - %m%n
+
+# Define the appenders for the throughput and latency loggers
+appender.main.type = File
+appender.main.name = MainAppender
+appender.main.fileName=${sys:logDir}/main.log
+appender.main.layout.type=PatternLayout
+appender.main.layout.pattern=${pattern}
+appender.main.append = false
+
+#appender.throughput.type = File
+#appender.throughput.name = ThroughputAppender
+#appender.throughput.fileName=${sys:logDir}/throughput.csv
+#appender.throughput.layout.type=PatternLayout
+#appender.throughput.layout.pattern=%m%n
+#appender.throughput.append = false
+#
+#appender.latency.type = File
+#appender.latency.name = LatencyAppender
+#appender.latency.fileName=${sys:logDir}/latency.csv
+#appender.latency.layout.type=PatternLayout
+#appender.latency.layout.pattern=%m%n
+#appender.latency.append = false
+
+appender.metric.type = File
+appender.metric.name = MetricAppender
+appender.metric.fileName=${sys:logDir}/me.csv
+appender.metric.layout.type=PatternLayout
+appender.metric.layout.pattern=%m%n
+appender.metric.append = false
+
+# Define the loggers for the throughput and latency
+logger.main.name = main
+logger.main.level = info
+logger.main.appenderRefs = mainAppender
+logger.main.appenderRef.mainAppender.ref = MainAppender
+
+#logger.latency.name = latency
+#logger.latency.level = info
+#logger.latency.appenderRefs = latencyAppender
+#logger.latency.appenderRef.latencyAppender.ref = LatencyAppender
+#
+#logger.throughput.name = throughput
+#logger.throughput.level = info
+#logger.throughput.appenderRefs = throughputAppender
+#logger.throughput.appenderRef.throughputAppender.ref = ThroughputAppender
+
+logger.metric.name = metric
+logger.metric.level = info
+logger.metric.appenderRefs = metricAppender
+logger.metric.appenderRef.metricAppender.ref = MetricAppender
