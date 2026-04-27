@@ -127,14 +127,15 @@ class ProcessMetricCollector:
 
     def __init__(
         self,
-        process_names: Sequence[str],
+        process_names: Sequence[str] | None = None,
         history_size: int = DEFAULT_HISTORY_SIZE,
     ) -> None:
-        self.process_names = list(process_names)
+        self.process_names = list(process_names) if process_names is not None else []
+        
         self.user = getpass.getuser()
         self._history_size = history_size
         self.history: dict[str, ProcessMetricsHistory] = {
-            name: ProcessMetricsHistory() for name in process_names
+            name: ProcessMetricsHistory() for name in self.process_names
         }
 
     def _match_process(self, proc: psutil.Process) -> str | None:
@@ -146,13 +147,32 @@ class ProcessMetricCollector:
         Returns:
             The matching process name pattern, or None if no match.
         """
-        if proc.username() != self.user:
+        print(f"[DEBUG] _match_process entered with pid={proc.pid}")
+        # Quick check: skip kernel threads and invalid processes
+        if proc.pid <= 2:
+            print(f"[DEBUG] Skipping pid {proc.pid} (<=2)")
             return None
-
         try:
-            cmdline = " ".join(proc.cmdline())
+            print(f"[DEBUG] Checking status of pid {proc.pid}")
+            # Check status first - skip zombies and other problematic states
+            try:
+                status = proc.status()
+                if status in (psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD):
+                    return None
+            except (psutil.AccessDenied, psutil.NoSuchProcess):
+                return None
+
+            with proc.oneshot():
+                proc_user = proc.username()
+                if proc_user != self.user:
+                    return None
+                cmdline = " ".join(proc.cmdline())
+            # Debug first few processes
+            if proc.pid % 1000 == 0:  # Sample some PIDs
+                print(f"[DEBUG] Checking PID {proc.pid}: user={proc_user}, cmdline[:100]={cmdline[:100]}")
             for name in self.process_names:
                 if name in cmdline:
+                    print(f"[DEBUG] Match found! name='{name}' in cmdline of PID {proc.pid}")
                     return name
         except (psutil.AccessDenied, psutil.NoSuchProcess) as e:
             logger.debug("Could not access process %s info: %s", proc.pid, e)
@@ -207,19 +227,40 @@ class ProcessMetricCollector:
             Each value contains 'found' (bool) and 'history' (ProcessMetricsHistory).
         """
         results: dict[str, dict[str, Any]] = {}
+        print(f"[DEBUG] collect() called, process_names={self.process_names}")
+        if not self.process_names:
+            print("[DEBUG] No process_names configured, returning empty results")
+            return results
+        try:
+            proc_count = 0
+            match_count = 0
+            print("[DEBUG] Starting process_iter()")
+            for proc in psutil.process_iter(['pid', 'name']):
+                proc_count += 1
+                print(f"[DEBUG] Got process object #{proc_count}")
+                if proc_count % 500 == 0:
+                    print(f"[DEBUG] Processed {proc_count} processes so far...")
+                print(f"[DEBUG] About to call _match_process on proc")
+                name = self._match_process(proc)
+                print(f"[DEBUG] _match_process returned: {name}")
+                if name is None:
+                    continue
+                match_count += 1
+                print(f"[DEBUG] Matched process: {name} (PID: {proc.pid})")
 
-        for proc in psutil.process_iter():
-            name = self._match_process(proc)
-            if name is None:
-                continue
+                metrics = self._extract_metrics(proc)
+                if metrics is None:
+                    print(f"[DEBUG] Failed to extract metrics for {name}")
+                    continue
 
-            metrics = self._extract_metrics(proc)
-            if metrics is None:
-                continue
-
-            self.history[name].append(metrics)
-            results[name] = {"found": True, "history": self.history[name]}
-
+                self.history[name].append(metrics)
+                results[name] = {"found": True, "history": self.history[name]}
+                print(f"[DEBUG] Collected metrics for {name}: cpu={metrics.cpu_percent:.1f}%")
+            print(f"[DEBUG] Total processed: {proc_count}, matched: {match_count}, results: {list(results.keys())}")
+        except Exception as e:
+            print(f"[DEBUG] Exception in collect(): {e}")
+            logger.exception("Failed to collect process metrics")
+            raise
         return results
 
 
@@ -243,10 +284,10 @@ class ProcessMonitor:
 
     def __init__(
         self,
-        process_names: Sequence[str],
+        process_names: Sequence[str] | None = None,
         refresh_interval: float = DEFAULT_REFRESH_INTERVAL,
     ) -> None:
-        self.process_names = list(process_names)
+        self.process_names = list(process_names) if process_names is not None else []
         self.user = getpass.getuser()
         self.refresh_interval = refresh_interval
         self.collector = ProcessMetricCollector(self.process_names)
@@ -274,7 +315,7 @@ class ProcessMonitor:
             min=MIN_REFRESH_INTERVAL,
             max=MAX_REFRESH_INTERVAL,
             step=0.5,
-            description="Interval (s):",
+            description="Interval (sec):",
             style={"description_width": "90px"},
             layout=widgets.Layout(width="340px"),
         )
@@ -291,15 +332,38 @@ class ProcessMonitor:
         """Display the monitoring dashboard in the Jupyter notebook."""
         display(self._dashboard)
 
+    def get_ui(self) -> widgets.VBox:
+        """Get the dashboard widget for embedding in other UIs.
+
+        Returns:
+            The dashboard VBox widget containing controls and plot.
+        """
+        return self._dashboard
+
+    def set_process_names(self, process_names: Sequence[str]) -> None:
+        """Update the process names to monitor.
+
+        Args:
+            process_names: List of process name patterns to monitor.
+        """
+        self.process_names = list(process_names)
+        self.collector = ProcessMetricCollector(self.process_names)
+        self._plot_widget = None  # Reset plot to use new processes
+
     def _start_collecting(self) -> None:
         """Start the metrics collection in a background thread."""
+        from multiprocessing import Process
+
         if self.running:
             return
-
         self.running = True
         self._btn_start.disabled = True
         self._btn_stop.disabled = False
-        threading.Thread(target=self._collect_loop, daemon=True).start()
+        # collect_thread = threading.Thread(target=self._collect_loop, daemon=True)
+        self._collect_process = Process(target=self._collect_loop,daemon=True)
+        self._collect_process.start()
+        #collect_thread.start()
+        
 
     def _stop_collecting(self) -> None:
         """Stop the metrics collection."""
@@ -309,27 +373,30 @@ class ProcessMonitor:
 
     def _collect_loop(self) -> None:
         """Main collection loop running in background thread."""
+        print(f"[DEBUG] _collect_loop started, running={self.running}")
         while self.running:
+            print(f"[DEBUG] collecting metrics, running={self.running}")
             metrics = self.collector.collect()
+            print(f"[DEBUG] Rendering metrics, running={self.running}")
             self._render_metrics(metrics)
-            time.sleep(self.refresh_interval)
+            time.sleep(int(self.refresh_interval))
+        print(f"[DEBUG] _collect_loop EXITED, running={self.running}")
 
-    def _on_start(self, button: widgets.Button) -> None:
+
+    def _on_start(self,b) -> None:
         """Handle start button click.
 
         Args:
             button: The button widget that triggered the event.
         """
-        del button  # Unused parameter
         self._start_collecting()
 
-    def _on_stop(self, button: widgets.Button) -> None:
+    def _on_stop(self,b) -> None:
         """Handle stop button click.
 
         Args:
             button: The button widget that triggered the event.
         """
-        del button  # Unused parameter
         self._stop_collecting()
 
     def _on_interval_change(self, change: dict[str, Any]) -> None:
@@ -368,6 +435,8 @@ class ProcessMonitor:
         Args:
             metrics: Dictionary of process metrics from collector.
         """
+        print(f"[DEBUG] Rendering metric.")
+
         if not metrics:
             return
 
@@ -376,7 +445,7 @@ class ProcessMonitor:
             k for k in vars(next(iter(metrics.values()))["history"])
             if k != "timestamp"
         ]
-
+        
         if self._plot_widget is None:
             self._create_plot(metrics, history_keys)
         else:

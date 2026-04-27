@@ -30,6 +30,7 @@ from .gui_components import (
     fetch_image,
 )
 from .slurm_utils import SlurmManager
+from .process_monitor import ProcessMonitor
 from .utils import run_bash_command, SimpleLogger
 
 
@@ -60,9 +61,10 @@ class GUIUtils:
         # Initialize managers
         self.slurm_info = SlurmManager()
         self.bdm = BigDataManager()
+        self.process_monitor = ProcessMonitor()
 
         # Widget containers
-        self._widgets: Dict[str, Any] = {}
+        self.widgets: Dict[str, Any] = {}
         self._last_cluster_result: Optional[Any] = None
 
         # Display widget
@@ -154,10 +156,10 @@ class GUIUtils:
     # Properties
     # =========================================================================
 
-    @property
-    def widgets(self) -> Dict[str, Any]:
-        """Access the widget dictionary."""
-        return self._widgets
+    # @property
+    # def widgets(self) -> Dict[str, Any]:
+    #     """Access the widget dictionary."""
+    #     return self.widgets
 
     @property
     def selected_framework(self):
@@ -171,33 +173,35 @@ class GUIUtils:
 
     def _create_widgets(self) -> None:
         """Create all GUI widgets."""
-        self._widgets["header_config"] = self._create_header("Cluster Configurator")
-        self._widgets["header_viz"] = self._create_header("Resource Allocation Overview")
+        self.widgets["header_config"] = self._create_header("Cluster Configurator")
+        self.widgets["header_viz"] = self._create_header("Resource Allocation Overview")
 
-        self._widgets["framework"] = self._create_framework_widget()
-        self._widgets["logo"] = self._create_logo_widget()
+        self.widgets["framework"] = self._create_framework_widget()
+        self.widgets["logo"] = self._create_logo_widget()
 
-        self._widgets["framework_home"] = self._create_framework_home_widget()
+        self.widgets["framework_home"] = self._create_framework_home_widget()
 
-        self._widgets["template"] = self._create_template_widget()
-        self._widgets["destination"] = self._create_destination_widget()
-        self._widgets["master_host"] = self._create_master_host_widget()
-        self._widgets["worker_hosts"] = self._create_worker_hosts_widget()
+        self.widgets["template"] = self._create_template_widget()
+        self.widgets["destination"] = self._create_destination_widget()
+        self.widgets["master_host"] = self._create_master_host_widget()
+        self.widgets["worker_hosts"] = self._create_worker_hosts_widget()
 
-        self._widgets["driver_cpu"] = self._create_driver_cpu_widget()
-        self._widgets["worker_cpu"] = self._create_worker_cpu_widget()
-        self._widgets["executor_cpu"] = self._create_executor_cpu_widget()
+        self.widgets["driver_cpu"] = self._create_driver_cpu_widget()
+        self.widgets["worker_cpu"] = self._create_worker_cpu_widget()
+        self.widgets["executor_cpu"] = self._create_executor_cpu_widget()
 
-        self._widgets["driver_memory"] = self._create_driver_memory_widget()
-        self._widgets["worker_memory"] = self._create_worker_memory_widget()
-        self._widgets["executor_memory"] = self._create_executor_memory_widget()
+        self.widgets["driver_memory"] = self._create_driver_memory_widget()
+        self.widgets["worker_memory"] = self._create_worker_memory_widget()
+        self.widgets["executor_memory"] = self._create_executor_memory_widget()
 
-        self._widgets["randomize_port"] = self._create_randomize_port_widget()
-        self._widgets["load_button"] = self._create_load_button()
-        self._widgets["output_area"] = self._create_output_area()
+        self.widgets["randomize_port"] = self._create_randomize_port_widget()
+        self.widgets["load_button"] = self._create_load_button()
+        self.widgets["output_area"] = self._create_output_area()
 
-        self._widgets["start_cluster"] = self._create_start_cluster_button()
-        self._widgets["stop_cluster"] = self._create_stop_cluster_button()
+        self.widgets["start_cluster"] = self._create_start_cluster_button()
+        self.widgets["stop_cluster"] = self._create_stop_cluster_button()
+
+        self.widgets["metric_dashboard"] = self._create_metric_dashboard()
 
     def _create_header(self, title: str) -> widgets.HTML:
         """Create the GUI header widget."""
@@ -425,6 +429,19 @@ class GUIUtils:
         button.on_click(self._on_stop_cluster_clicked)
         return button
     
+    def _create_metric_dashboard(self) -> widgets.Box:
+        """Create the metric dashboard widget.
+
+        Updates the process monitor with current cluster processes
+        and returns its UI widget.
+
+        Returns:
+            The metric dashboard widget.
+        """
+        processes = self.bdm.get_fw_cluster_processes(all_procs=True)
+        self.process_monitor.set_process_names(processes)
+        return self.process_monitor.get_ui()
+
     def _create_output_area(self) -> widgets.Output:
         output_widget = widgets.Output(
             layout=widgets.Layout(
@@ -622,6 +639,12 @@ class GUIUtils:
             ),
         )
 
+        row3 = widgets.VBox([
+            self._create_header(title="Metric Dashboard"),
+            self.widgets["metric_dashboard"]
+        ])
+
+        
         # Inject CSS for text wrapping in output area
         style_html = """
         <style>
@@ -660,7 +683,7 @@ class GUIUtils:
         style_widget = widgets.HTML(value=style_html)
 
         main_container = widgets.VBox(
-            [style_widget, row1, row2, self.widgets["output_area"]],
+            [style_widget, row1, row2, row3, self.widgets["output_area"]],
             layout=widgets.Layout(
                 display="flex",
                 flex_flow="column",
@@ -693,7 +716,6 @@ class GUIUtils:
             self.widgets["executor_memory"],
             self.widgets["randomize_port"],
             self.widgets["load_button"],
-            
         ]
 
         return widgets.VBox(
