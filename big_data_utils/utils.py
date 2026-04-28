@@ -8,24 +8,11 @@ and safe bash command execution.
 from __future__ import annotations
 
 import datetime
-import enum
 import os
 import subprocess
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
-
-
-# =============================================================================
-# Enums
-# =============================================================================
-
-class LogLevel(enum.Enum):
-    """Logging levels for the SimpleLogger."""
-
-    INFO = "INFO "
-    DEBUG = "DEBUG"
-    ERROR = "ERROR"
-    WARNING = "WARN "
+from enum import IntEnum
 
 
 # =============================================================================
@@ -50,13 +37,25 @@ class CommandResult:
 # =============================================================================
 # Logging
 # =============================================================================
+class LogLevel(IntEnum):
+    DEBUG = 10
+    INFO = 20
+    WARNING = 30
+    ERROR = 40
+
+    @property
+    def label(self):
+        # Provides the padded string for alignment in the console
+        return {
+            LogLevel.DEBUG: "DEBUG",
+            LogLevel.INFO: "INFO ",
+            LogLevel.WARNING: "WARN ",
+            LogLevel.ERROR: "ERROR",
+        }[self]
 
 class SimpleLogger:
     """
     A simple logger that prints messages with timestamps and log levels.
-
-    This logger provides basic logging functionality without external dependencies.
-    It prints to stdout with formatted timestamps and colored log levels.
     """
 
     # ANSI color codes
@@ -68,51 +67,44 @@ class SimpleLogger:
         "reset": "\033[0m",
     }
 
-    def __init__(self, use_colors: bool = True):
-        """
-        Initialize the logger.
-
-        Args:
-            use_colors: Whether to use ANSI color codes in output
-        """
+    def __init__(self, use_colors: bool = True, level: LogLevel = LogLevel.INFO):
         self.use_colors = use_colors
+        self.level = level
 
-    def log(self, message: str, level: LogLevel) -> None:
-        """
-        Log a message with the specified level.
+    def set_log_level(self, level: LogLevel):
+        self.level = level
 
-        Args:
-            message: The message to log
-            level: The log level
-        """
+    def log(self, message: str, asked_level: LogLevel) -> None:
+        """Log a message if it meets the minimum log level."""
+        if asked_level < self.level:
+            return
+
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
+        # Use the helper property for the string label
+        level_label = asked_level.label
 
         if self.use_colors:
-            color = self.COLORS.get(level, "")
+            color = self.COLORS.get(asked_level, "")
             reset = self.COLORS["reset"]
-            print(f"[{color}{level.value}{reset}] [{timestamp}] - {message}")
+            print(f"[{color}{level_label}{reset}] [{timestamp}] - {message}")
         else:
-            print(f"[{level.value}] [{timestamp}] - {message}")
+            print(f"[{level_label}] [{timestamp}] - {message}")
 
     def info(self, message: str) -> None:
-        """Log an info message."""
         self.log(message, LogLevel.INFO)
 
     def debug(self, message: str) -> None:
-        """Log a debug message."""
         self.log(message, LogLevel.DEBUG)
 
     def error(self, message: str) -> None:
-        """Log an error message."""
         self.log(message, LogLevel.ERROR)
 
     def warning(self, message: str) -> None:
-        """Log a warning message."""
         self.log(message, LogLevel.WARNING)
 
-
 # Global logger instance
-mylogger = SimpleLogger()
+logger = SimpleLogger()
 
 
 # =============================================================================

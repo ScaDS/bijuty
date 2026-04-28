@@ -19,7 +19,7 @@ import io
 from contextlib import redirect_stdout, redirect_stderr
 
 import ipywidgets as widgets
-from IPython.display import clear_output, display
+from IPython.display import clear_output, display, IFrame
 
 from .big_data_manager import BigDataManager
 from .gui_components import (
@@ -31,10 +31,10 @@ from .gui_components import (
 )
 from .slurm_utils import SlurmManager
 from .process_monitor import ProcessMonitor
-from .utils import run_bash_command, SimpleLogger
+from .utils import run_bash_command, logger
 
 
-logger = SimpleLogger()
+# logger = SimpleLogger()
 
 
 # =============================================================================
@@ -146,20 +146,24 @@ class GUIUtils:
         try:
             self._execute_framework_setup()
             self._update_spark_environment()
+            
+            self._initialize_big_data_manager()
+            
+            # Set process monitor metrics
+            self.process_monitor.set_process_names(self.bdm.get_fw_cluster_processes(all_procs=True))
+            self.widgets["metric_dashboard"] = self.process_monitor.get_ui()
+            
         except Exception as e:
             self._handle_setup_error(e)
         finally:
             self.widgets["load_button"].disabled = False
-            self._initialize_big_data_manager()
+            
+
+        
 
     # =========================================================================
     # Properties
     # =========================================================================
-
-    # @property
-    # def widgets(self) -> Dict[str, Any]:
-    #     """Access the widget dictionary."""
-    #     return self.widgets
 
     @property
     def selected_framework(self):
@@ -202,6 +206,59 @@ class GUIUtils:
         self.widgets["stop_cluster"] = self._create_stop_cluster_button()
 
         self.widgets["metric_dashboard"] = self._create_metric_dashboard()
+        self.widgets["framework_gui"] = self._create_framework_web_gui()
+
+    def _create_framework_web_gui(self) -> widgets.Tab:
+        """Create a browser window displayer with tabs for framework UI links.
+
+        Returns:
+            A Tab widget containing links to framework web UIs.
+        """
+        def make_iframe_tab(url: str) -> widgets.Output:
+            out = widgets.Output(layout=widgets.Layout(width="100%"))
+            with out:
+                display(IFrame(src=url, width="100%", height="600px"))
+            return out
+
+        fw_name = self.get_selected_framework_name() or "SPARK"
+        base_proxy_url = "http://localhost"
+        links = []
+        titles = []
+
+        if fw_name == "SPARK":
+            spark_links = [
+                ("8080", "Master UI"),
+                ("8081", "Worker UI"),
+                ("4040", "Application UI"),
+            ]
+            for port, title in spark_links:
+                url = f"{base_proxy_url}:{port}/"
+                #iframe = IFrame(src=url, width="100%", height="600px")
+                #tab_content = widgets.VBox([iframe], layout=widgets.Layout(width="100%"))
+                #links.append(tab_content)
+                links.append(make_iframe_tab(url))               
+                titles.append(title)
+
+        elif fw_name == "FLINK":
+            url = f"{base_proxy_url}:8081/"
+            # iframe = IFrame(src=url, width="100%", height="600px")
+            # tab_content = widgets.VBox([iframe], layout=widgets.Layout(width="100%"))
+            # links.append(tab_content)
+            links.append(make_iframe_tab(url))               
+            titles.append("Flink UI")
+
+        if not links:
+            placeholder = widgets.HTML(
+                value='<div style="padding:10px;">No UI links available. Start the cluster to view web interfaces.</div>'
+            )
+            links = [placeholder]
+            titles = ["Info"]
+
+        tab_widget = widgets.Tab(children=links)
+        for i, title in enumerate(titles):
+            tab_widget.set_title(i, title)
+        
+        return tab_widget
 
     def _create_header(self, title: str) -> widgets.HTML:
         """Create the GUI header widget."""
@@ -438,8 +495,8 @@ class GUIUtils:
         Returns:
             The metric dashboard widget.
         """
-        processes = self.bdm.get_fw_cluster_processes(all_procs=True)
-        self.process_monitor.set_process_names(processes)
+        # processes = self.bdm.get_fw_cluster_processes(all_procs=True)
+        # self.process_monitor.set_process_names(processes)
         return self.process_monitor.get_ui()
 
     def _create_output_area(self) -> widgets.Output:
@@ -558,6 +615,7 @@ class GUIUtils:
             with self.widgets["output_area"]:
                 self._last_cluster_result = self.bdm.start_cluster()
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+
         except Exception as e:
             tb = traceback.format_exc()
             self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
@@ -604,8 +662,6 @@ class GUIUtils:
             # Update checkbox description
             checkbox.description = f"Use custom {fw_name}_HOME : "
             
-            # Update path input description
-            #path_input.description = f"{fw_name}_HOME Path:"
 
     # =========================================================================
     # GUI Assembly
@@ -640,6 +696,7 @@ class GUIUtils:
         )
 
         row3 = widgets.VBox([
+            self.widgets["framework_gui"],
             self._create_header(title="Metric Dashboard"),
             self.widgets["metric_dashboard"]
         ])

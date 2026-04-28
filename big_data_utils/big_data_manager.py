@@ -21,7 +21,8 @@ import psutil
 
 from .slurm_utils import SlurmManager
 from .gui_components import FrameworkConfig
-from .utils import SimpleLogger, run_bash_command
+from .process_monitor import ProcessMonitor
+from .utils import logger, run_bash_command
 
 # =============================================================================
 # Constants
@@ -135,14 +136,6 @@ def find_processes_using_dir(target_dir: str) -> List[Tuple[int, str, str]]:
             continue
 
     return found_processes
-
-
-# =============================================================================
-# Logger Setup
-# =============================================================================
-
-logger = SimpleLogger()
-
 
 # =============================================================================
 # Big Data Manager
@@ -534,6 +527,7 @@ class BigDataManager:
             return False
 
         processes = self.get_fw_cluster_processes()
+        
         if len(processes) < 2:
             return False
 
@@ -649,14 +643,14 @@ class BigDataManager:
         log_path = self.get_cluster_log_file()
         full_cmd = f"{cmd_script} > {log_path} 2>&1"
 
-        logger.info(f"Running: {full_cmd}")
+        logger.debug(f"Running: {full_cmd}")
         result = run_bash_command(full_cmd, shell=True)
 
         if result.failed:
             logger.error(f"Failed to start cluster: {result.stderr}")
             return False
 
-        logger.info(result.stdout)
+        logger.debug(result.stdout)
 
         if self.wait_for_cluster_init(timeout=60):
             logger.info(f"{self._user_inputs.fw_name} cluster started successfully")
@@ -785,8 +779,6 @@ class BigDataManager:
 
     def show_metrics(self) -> None:
         """Display cluster metrics using ProcessMonitor."""
-        from .process_monitor import ProcessMonitor
-
         processes = self.get_fw_cluster_processes(all_procs=True)
         monitor = ProcessMonitor(processes)
         monitor.show()

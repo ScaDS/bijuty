@@ -13,6 +13,12 @@ try:
 except ImportError:
     pass
 
+# import logging
+# class IgnoreNoSuchComm(logging.Filter):
+#     def filter(self, record):
+#         return 'No such comm' not in record.getMessage()
+# logging.getLogger('Comm').addFilter(IgnoreNoSuchComm())
+
 # Import GUI components for easy access
 from .gui_utils import GUIUtils
 from .gui_components import (
