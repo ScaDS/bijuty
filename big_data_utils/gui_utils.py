@@ -262,14 +262,13 @@ class GUIUtils:
             ssh_parts = " ".join(
                 f"-L {port}:{master_host}:{port}" for port, _ in web_ui_links
             )
-            ssh_cmd = f"ssh {self.slurm_info.user}@{} {ssh_parts} <jump-host>"
+            ssh_cmd = f"ssh {self.slurm_info.user}@{self.slurm_info.login_node} {ssh_parts} <jump-host>"
 
             instructions = f"""
             <div style="padding:10px; margin-top:10px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-family:monospace; font-size:12px;">
               <b>Remote environment detected</b><br/>
               If above links do not open in your local browser, set up SSH port forwarding:
               <pre style="background:#f7f7f7; padding:8px; border-radius:3px; margin:6px 0;">{ssh_cmd}</pre>
-              Then open the corresponding ports on <b>localhost</b> in your local browser.
             </div>
             """
         return widgets.VBox(

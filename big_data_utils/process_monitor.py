@@ -333,17 +333,7 @@ class ProcessMonitor:
             margin='5px 0px',
             display='flex',
             flex_flow='column',
-        )) # Holds the FigureWidgets
-        # self._dashboard = widgets.VBox([
-        #     self._controls,
-        #     self._plot_container
-        # ],layout=widgets.Layout(
-        #     width='100%',
-        #     margin='5px 0px',
-        #     display='flex',
-        #     flex_flow='column',
-        # ))
-        #self._plot_widget: dict[str,go.FigureWidget] | None = None
+        ))
 
         self._dashboard = widgets.VBox([self._controls,self._plot_widget])
 

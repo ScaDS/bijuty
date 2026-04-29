@@ -12,6 +12,7 @@ import os
 import subprocess
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
+import socket
 
 
 # =============================================================================
@@ -68,18 +69,6 @@ class JobResources:
     def total_memory(self) -> int:
         """Calculate total memory across all nodes (in MB)."""
         return self.memory_per_node_effective * self.node_count
-
-
-@dataclass
-class SlurmJobInfo:
-    """Structured SLURM job information."""
-    user: str
-    job_id: str
-    status: str
-    nodes: List[str] = field(default_factory=list)
-    resources: Optional[JobResources] = None
-    partition: Optional[str] = None
-    raw_info: Dict[str, Any] = field(default_factory=dict, repr=False)
 
 
 # =============================================================================
@@ -154,38 +143,39 @@ class SlurmManager:
             self._user = os.environ.get("USER")
             self._job_id = self._job_context.get("JOB_ID", "unknown")
             self._job_info_raw = self._fetch_job_info()
+            
+            
         else:
             self._job_context = {}
             self._job_id = "none"
             self._job_info_raw = {}
-
+        
+        self._login_node = self._get_default_login_host()
         self._resources: Optional[JobResources] = None
-        self._structured_info: Optional[SlurmJobInfo] = None
 
     @property
     def in_slurm_job(self) -> bool:
-        """Check if running in a SLURM job."""
         return self._in_slurm_job
 
     @property
     def user(self) -> str:
-        """Get the SLURM job ID."""
         return self._user
 
     @property
     def job_id(self) -> str:
-        """Get the SLURM job ID."""
         return self._job_id
 
     @property
     def job_context(self) -> Dict[str, str]:
-        """Get SLURM environment context."""
         return self._job_context.copy()
 
     @property
     def job_info(self) -> Dict[str, Any]:
-        """Get raw job information."""
         return self._job_info_raw.copy() if self._job_info_raw else {}
+    
+    @property
+    def login_node(self) -> str:
+        return self._login_node
 
     # =====================================================================
     # Private Methods
@@ -270,6 +260,13 @@ class SlurmManager:
         if self._resources is None:
             self._resources = self._parse_job_resources()
         return self._resources
+    
+    def _get_default_login_host(self):
+        fqdn = socket.getfqdn().strip()
+        parts = fqdn.split('.',2)
+        if len(parts) > 2:
+            return f"login1.{parts[1]}.{parts[2]}"
+        return "localhost"
 
     # =====================================================================
     # Public API - Job Control
