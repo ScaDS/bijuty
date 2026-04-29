@@ -214,37 +214,43 @@ class GUIUtils:
         Returns:
             A Tab widget containing links to framework web UIs.
         """
-        def make_iframe_tab(url: str) -> widgets.Output:
-            out = widgets.Output(layout=widgets.Layout(width="100%"))
-            with out:
-                display(IFrame(src=url, width="100%", height="600px"))
-            return out
-
-        fw_name = self.get_selected_framework_name() or "SPARK"
-        base_proxy_url = "http://localhost"
-        links = []
         titles = []
 
+        def make_iframe_tab(url: str, title: str) -> widgets.VBox:
+            iframe_html = widgets.HTML(
+                value=f'<iframe src="{url}" width="100%" height="600px" frameborder="0"></iframe>'
+            )
+            refresh_btn = widgets.Button(
+                description="Refresh",
+                button_style="primary",
+                layout=widgets.Layout(width="80px", height="30px"),
+            )
+            header = widgets.HBox(
+                [refresh_btn, widgets.HTML(f"<b style='margin-left:10px;'>{title}</b>")],
+                layout=widgets.Layout(height="40px", align_items="center"),
+            )
+
+            def refresh_iframe(b):
+                # Force reload by briefly blanking src then restoring
+                iframe_html.value = ""
+                iframe_html.value = f'<iframe src="{url}" width="100%" height="600px" frameborder="0"></iframe>'
+
+            refresh_btn.on_click(refresh_iframe)
+            return widgets.VBox([header, iframe_html], layout=widgets.Layout(width="100%"))
+
+        fw_name = self.get_selected_framework_name() or "SPARK"
+        base_proxy_url = f"{os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "/")}proxy/absolute"
+
+        links = []
         if fw_name == "SPARK":
-            spark_links = [
-                ("8080", "Master UI"),
-                ("8081", "Worker UI"),
-                ("4040", "Application UI"),
-            ]
-            for port, title in spark_links:
-                url = f"{base_proxy_url}:{port}/"
-                #iframe = IFrame(src=url, width="100%", height="600px")
-                #tab_content = widgets.VBox([iframe], layout=widgets.Layout(width="100%"))
-                #links.append(tab_content)
-                links.append(make_iframe_tab(url))               
+            for port, title in [("8080", "Master UI"), ("8081", "Worker UI"), ("4040", "Application UI")]:
+                url = f"{base_proxy_url}/{port}/"
+                links.append(make_iframe_tab(url, f"{title}: {url}"))
                 titles.append(title)
 
         elif fw_name == "FLINK":
-            url = f"{base_proxy_url}:8081/"
-            # iframe = IFrame(src=url, width="100%", height="600px")
-            # tab_content = widgets.VBox([iframe], layout=widgets.Layout(width="100%"))
-            # links.append(tab_content)
-            links.append(make_iframe_tab(url))               
+            url = f"{base_proxy_url}/8081/"
+            links.append(make_iframe_tab(url, f"Flink UI: {url}"))
             titles.append("Flink UI")
 
         if not links:
@@ -257,7 +263,7 @@ class GUIUtils:
         tab_widget = widgets.Tab(children=links)
         for i, title in enumerate(titles):
             tab_widget.set_title(i, title)
-        
+
         return tab_widget
 
     def _create_header(self, title: str) -> widgets.HTML:
