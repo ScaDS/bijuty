@@ -8,7 +8,7 @@ for building Jupyter notebook-based interfaces using ipywidgets.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import os
 import ipywidgets as widgets
@@ -65,6 +65,8 @@ class FrameworkConfig:
     default_master_port: int
     default_resources: Optional[Dict[str, int]] = None
     proc_other: Optional[List[str]] = None
+    web_ui_links: Optional[List[Tuple[str, str]]] = None
+    """List of (port, title) tuples for framework web UIs."""
 
     @property
     def default_template(self) -> str:
@@ -131,6 +133,11 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
             "cpu_worker": 1,
             "cpu_executor": 1,
         },
+        web_ui_links=[
+            ("8080", "Master UI"),
+            ("8081", "Worker UI"),
+            ("4040", "Application UI"),
+        ],
     ),
     "FLINK": FrameworkConfig(
         name="FLINK",
@@ -141,6 +148,9 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
         logo_url="https://flink.apache.org/img/logo/png/200/flink_squirrel_200_color.png",
         worker_file="workers",
         default_master_port=8081,
+        web_ui_links=[
+            ("8081", "Flink UI"),
+        ],
     ),
 }
 

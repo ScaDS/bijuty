@@ -19,7 +19,7 @@ import io
 from contextlib import redirect_stdout, redirect_stderr
 
 import ipywidgets as widgets
-from IPython.display import clear_output, display, IFrame
+from IPython.display import clear_output, display
 
 from .big_data_manager import BigDataManager
 from .gui_components import (
@@ -208,63 +208,76 @@ class GUIUtils:
         self.widgets["metric_dashboard"] = self._create_metric_dashboard()
         self.widgets["framework_gui"] = self._create_framework_web_gui()
 
-    def _create_framework_web_gui(self) -> widgets.Tab:
-        """Create a browser window displayer with tabs for framework UI links.
+    def _create_framework_web_gui(self) -> widgets.HBox:
+        """Create a panel with simple buttons to open framework web UIs.
+
+        When running remotely, displays SSH port-forwarding instructions so the
+        user can open the links in a local browser.
 
         Returns:
-            A Tab widget containing links to framework web UIs.
+            A VBox widget containing buttons and optional port-forward instructions.
         """
-        titles = []
+        fw_name = self.get_selected_framework_name()
+        base_url = f"http://localhost"
+        is_remote = self.slurm_info.in_slurm_job
+        master_host = self.get_selected_master_host()
 
-        def make_iframe_tab(url: str, title: str) -> widgets.VBox:
-            iframe_html = widgets.HTML(
-                value=f'<iframe src="{url}" width="100%" height="600px" frameborder="0"></iframe>'
+        rows: List[widgets.Widget] = []
+        fw_config = FRAMEWORK_REGISTRY.get(fw_name)
+        web_ui_links = fw_config.web_ui_links if fw_config else None
+
+        def make_link_row(url: str, title: str) -> widgets.VBox:
+            link_html = f"""
+            <a href="{url}" target="_blank" style="text-decoration:none;">
+                <button class="p-Widget jupyter-widgets jupyter-button widget-button mod-primary" 
+                        style="width:160px; height:32px; cursor:pointer;">
+                    Open {title}
+                </button>
+            </a>
+            """
+            btn_widget = widgets.HTML(value=link_html)
+            
+            link_lbl = widgets.HTML(
+                value=f"<a href='{url}' target='_blank' style='margin-left:8px;'>{url}</a>"
             )
-            refresh_btn = widgets.Button(
-                description="Refresh",
-                button_style="primary",
-                layout=widgets.Layout(width="80px", height="30px"),
-            )
-            header = widgets.HBox(
-                [refresh_btn, widgets.HTML(f"<b style='margin-left:10px;'>{title}</b>")],
-                layout=widgets.Layout(height="40px", align_items="center"),
+
+            return widgets.VBox(
+                [btn_widget, link_lbl],
+                layout=widgets.Layout(align_items="center", margin="4px 0"),
             )
 
-            def refresh_iframe(b):
-                # Force reload by briefly blanking src then restoring
-                iframe_html.value = ""
-                iframe_html.value = f'<iframe src="{url}" width="100%" height="600px" frameborder="0"></iframe>'
-
-            refresh_btn.on_click(refresh_iframe)
-            return widgets.VBox([header, iframe_html], layout=widgets.Layout(width="100%"))
-
-        fw_name = self.get_selected_framework_name() or "SPARK"
-        base_proxy_url = f"{os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "/")}proxy/absolute"
-
-        links = []
-        if fw_name == "SPARK":
-            for port, title in [("8080", "Master UI"), ("8081", "Worker UI"), ("4040", "Application UI")]:
-                url = f"{base_proxy_url}/{port}/"
-                links.append(make_iframe_tab(url, f"{title}: {url}"))
-                titles.append(title)
-
-        elif fw_name == "FLINK":
-            url = f"{base_proxy_url}/8081/"
-            links.append(make_iframe_tab(url, f"Flink UI: {url}"))
-            titles.append("Flink UI")
-
-        if not links:
-            placeholder = widgets.HTML(
-                value='<div style="padding:10px;">No UI links available. Start the cluster to view web interfaces.</div>'
+        if web_ui_links:
+            for port, title in web_ui_links:
+                url = f"{base_url}:{port}/"
+                rows.append(make_link_row(url, title))
+        else:
+            rows.append(
+                widgets.HTML(
+                    value='<div style="padding:10px;">No UI links available. Start the cluster to view web interfaces.</div>'
+                )
             )
-            links = [placeholder]
-            titles = ["Info"]
 
-        tab_widget = widgets.Tab(children=links)
-        for i, title in enumerate(titles):
-            tab_widget.set_title(i, title)
+        if is_remote and web_ui_links:
+            # Build port-forward instructions dynamically from registry
+            ssh_parts = " ".join(
+                f"-L {port}:{master_host}:{port}" for port, _ in web_ui_links
+            )
+            ssh_cmd = f"ssh {self.slurm_info.user}@{} {ssh_parts} <jump-host>"
 
-        return tab_widget
+            instructions = f"""
+            <div style="padding:10px; margin-top:10px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-family:monospace; font-size:12px;">
+              <b>Remote environment detected</b><br/>
+              If above links do not open in your local browser, set up SSH port forwarding:
+              <pre style="background:#f7f7f7; padding:8px; border-radius:3px; margin:6px 0;">{ssh_cmd}</pre>
+              Then open the corresponding ports on <b>localhost</b> in your local browser.
+            </div>
+            """
+        return widgets.VBox(
+            [
+                widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
+                widgets.HTML(value=instructions)
+            ],layout=widgets.Layout(width="100%", padding="8px")
+        )
 
     def _create_header(self, title: str) -> widgets.HTML:
         """Create the GUI header widget."""

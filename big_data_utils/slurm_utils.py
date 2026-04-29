@@ -73,7 +73,7 @@ class JobResources:
 @dataclass
 class SlurmJobInfo:
     """Structured SLURM job information."""
-
+    user: str
     job_id: str
     status: str
     nodes: List[str] = field(default_factory=list)
@@ -151,6 +151,7 @@ class SlurmManager:
 
         if self._in_slurm_job:
             self._job_context = get_slurm_env_context()
+            self._user = os.environ.get("USER")
             self._job_id = self._job_context.get("JOB_ID", "unknown")
             self._job_info_raw = self._fetch_job_info()
         else:
@@ -165,6 +166,11 @@ class SlurmManager:
     def in_slurm_job(self) -> bool:
         """Check if running in a SLURM job."""
         return self._in_slurm_job
+
+    @property
+    def user(self) -> str:
+        """Get the SLURM job ID."""
+        return self._user
 
     @property
     def job_id(self) -> str:
