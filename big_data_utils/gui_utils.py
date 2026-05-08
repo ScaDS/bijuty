@@ -31,7 +31,7 @@ from .gui_components import (
 )
 from .slurm_utils import SlurmManager
 from .process_monitor import ProcessMonitor
-from .utils import run_bash_command, logger
+from .utils import run_bash_command, logger, get_file_content
 
 
 # logger = SimpleLogger()
@@ -761,31 +761,10 @@ class GUIUtils:
         ])
         row4.add_class("sub-container")
         
-
-        
         # Inject CSS for text wrapping in output area
-        style_html = """
+        html_header_content = f"""
         <style>
-        .main-container {
-            padding: 10px;
-            border-radius: 10px;
-            /* background-image: linear-gradient( 179.6deg,  rgba(0,19,26,1) -4.9%, rgba(0,77,105,1) 108.4% ) !important; */
-            background: #0f2d56 !important;
-        }
-        .sub-container {
-            padding: 20px;
-            margin: 5px;
-            border-radius: 10px;
-            background: #bbdefb !important;
-        }
-        .log {
-            white-space: pre-wrap !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
-            max-width: 100% !important;
-            background: #bbdefb !important;
-            display: flex;
-        }
+        {get_file_content(os.path.join(os.path.dirname(__file__),"style.css"))}
         </style>
         <script>
         var el = document.querySelector('.id-log');
@@ -793,7 +772,7 @@ class GUIUtils:
         </script>
         """
         
-        style_widget = widgets.HTML(value=style_html)
+        style_widget = widgets.HTML(value=html_header_content)
 
         main_container : widgets.VBox = widgets.VBox(
             [style_widget, row1, row2, row3,row4, self.widgets["output_area"]],

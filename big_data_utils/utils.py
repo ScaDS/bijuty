@@ -185,7 +185,7 @@ def run_bash_command(
 
     except subprocess.CalledProcessError as e:
         error_output = e.stderr.strip() or e.stdout.strip()
-        mylogger.error(f"Command failed: {cmd}\nError: {error_output}")
+        logger.error(f"Command failed: {cmd}\nError: {error_output}")
         return CommandResult(
             stdout=e.stdout.strip(),
             stderr=error_output,
@@ -194,7 +194,7 @@ def run_bash_command(
         )
 
     except subprocess.TimeoutExpired as e:
-        mylogger.error(f"Command timed out after {timeout}s: {cmd}")
+        logger.error(f"Command timed out after {timeout}s: {cmd}")
         stdout = e.stdout.decode().strip() if e.stdout else ""
         stderr = e.stderr.decode().strip() if e.stderr else "Timeout expired"
         return CommandResult(
@@ -205,7 +205,7 @@ def run_bash_command(
         )
 
     except FileNotFoundError:
-        mylogger.error(f"Executable not found: {cmd if isinstance(cmd, str) else cmd[0]}")
+        logger.error(f"Executable not found: {cmd if isinstance(cmd, str) else cmd[0]}")
         return CommandResult(
             stdout="",
             stderr="Executable not found",
@@ -214,10 +214,20 @@ def run_bash_command(
         )
 
     except OSError as e:
-        mylogger.error(f"OS error while running command: {e}")
+        logger.error(f"OS error while running command: {e}")
         return CommandResult(
             stdout="",
             stderr=str(e),
             returncode=1,
             success=False,
         )
+
+def get_file_content(file_path):
+    """Reads a file and returns its content as a string."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except FileNotFoundError:
+        return "Error: The file was not found."
+    except Exception as e:
+        return f"An error occurred: {e}"

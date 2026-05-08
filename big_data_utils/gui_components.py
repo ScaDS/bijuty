@@ -263,29 +263,140 @@ class HTMLGenerator:
         memory = slurm_info.get_total_memory()
         memory_per_node = slurm_info.get_memory_per_node()
 
+        # return f"""
+        # <div style="display: flex; text-align: center; flex-direction: column;">
+        #     <div style="text-align: center; font-weight: bold; margin-bottom: 10px; width: 100%">
+        #         Slurm Job
+        #     </div>
+        #     <div style="display: grid; grid-template-columns: 33% 33% 33%; align-items: center; justify-content: center">
+        #         <div style="color: #666; font-size: 12px; padding: 0px">
+        #             NODES
+        #             <div style="font-family: monospace; font-weight: bold; color: #2980b9; align-items: center; justify-content: center;">
+        #                 {nodes}
+        #             </div>
+        #         </div>
+        #         <div style="color: #666; font-size: 12px; align-items: center; justify-content: center;">
+        #             CPUs
+        #             <div style="font-weight: bold;">{cpu_cores} <br>{cpu_per_node}/Node </div>
+        #         </div>
+        #         <div style="color: #666; font-size: 12px; align-items: center; justify-content: center;">
+        #             MEMORY
+        #             <div style="font-weight: bold;">{memory} MB <br> {memory_per_node} MB/Node</div>
+        #         </div>
+        #     </div>
+        # </div>
+        # """
+    
         return f"""
-        <div style="display: flex; text-align: center; flex-direction: column;">
-            <div style="text-align: center; font-weight: bold; margin-bottom: 10px; width: 100%">
-                Slurm Job
-            </div>
-            <div style="display: grid; grid-template-columns: 33% 33% 33%; align-items: center; justify-content: center">
-                <div style="color: #666; font-size: 12px; padding: 0px">
-                    NODES
-                    <div style="font-family: monospace; font-weight: bold; color: #2980b9; align-items: center; justify-content: center;">
-                        {nodes}
-                    </div>
-                </div>
-                <div style="color: #666; font-size: 12px; align-items: center; justify-content: center;">
-                    CPUs
-                    <div style="font-weight: bold;">{cpu_cores} <br>{cpu_per_node}/Node </div>
-                </div>
-                <div style="color: #666; font-size: 12px; align-items: center; justify-content: center;">
-                    MEMORY
-                    <div style="font-weight: bold;">{memory} MB <br> {memory_per_node} MB/Node</div>
-                </div>
-            </div>
+        <div style="
+            border: 3px solid #016652;
+            border-radius: 10px;
+            width: 95%;
+            height: 700px;
+            overflow-y: scroll;
+            background: #7df5dd;
+            display: flex;
+            flex-direction: column;
+            padding: 0px;
+            margin: 5px;
+        ">
+            <div style="display: flex; flex-direction: column;">
+        <div style="color: #016652; text-align: left; font-weight: bold; font-size: large;">
+            Slurm Job
+            <span class="type"
+                style="color: #016652; background-color: #22f7cc; border-radius:10px; font-weight: normal; font-size:12px; padding:3px; border: 1px dashed #016652;">
+                Physical Node
+            </span>
         </div>
+        <div class="resources" style="color: #016652; font-size:15px;margin:0px; padding:0px;">
+            <div style="margin:0px; padding:0px;background-color: #7df5dd;">Cores: {cpu_cores} ({cpu_per_node}/Node)</div>
+            <div style="margin:0px; padding:0px;">Memory: {memory} MB ({memory_per_node} MB/Node)</div>
+        </div>
+    </div>
+    </div>
         """
+    @staticmethod
+    def generate_slurm_visualization(
+        title: str,
+        card_type: str,
+        resources: str,
+        children: list = None,
+        color: str = "#016652",
+        is_root: bool = True
+    ) -> str:
+        """
+        Generates a hierarchical, recursive HTML visualization for Slurm Jobs, Nodes, and Processes.
+        
+        :param title: The title of the card (e.g. 'Slurm Job', 'Node 01')
+        :param card_type: The badge text (e.g. 'Physical Node', 'Process')
+        :param resources: Resource description string (e.g. 'Cores: 8 | Memory: 16384 MB')
+        :param children: A list of dicts, where each dict represents a child card structure.
+        :param color: Base color (CSS-compatible value, e.g. hex '#016652' or name 'teal').
+        :param is_root: Private flag to manage recursive rendering and base CSS styling.
+        """
+        if children is None:
+            children = []
+
+        # Recursively generate HTML for all child nodes
+        children_html = ""
+        if children:
+            child_cards_markup = []
+            for child in children:
+                # Fall back to parent's color if child doesn't specify its own
+                child_color = child.get("color", color)
+                
+                child_html = HTMLGenerator.generate_slurm_visualization(
+                    title=child.get("title", "Child Node"),
+                    card_type=child.get("type", "Process"),
+                    resources=child.get("resources", ""),
+                    children=child.get("children", []),
+                    color=child_color,
+                    is_root=False
+                )
+                child_cards_markup.append(child_html)
+                
+            children_html = f"""
+            <div class="slurm-card__children">
+                {"".join(child_cards_markup)}
+            </div>
+            """
+
+        # Build individual card block with an inline style to pass the custom primary color
+        card_html = f"""
+        <section class="slurm-card" style="--slurm-primary: {color};" aria-label="{title} Info">
+        <header class="slurm-card__header">
+            <h2 class="slurm-card__title">{title}</h2>
+            <span class="slurm-card__badge">{card_type}</span>
+        </header>
+
+        <p class="slurm-card__resources">
+            {resources}
+        </p>
+        {children_html}
+        </section>
+        """
+
+        # If this is the top-level card, package it with the shared responsive CSS stylesheet
+        if is_root:
+            return f"""<div class="slurm-container">{card_html}</div>"""
+
+        return card_html
+    # <div style="display: grid; grid-template-columns: 33% 33% 33%; align-items: center; justify-content: center">
+    #             <div style="color: #666; font-size: 12px; padding: 0px">
+    #                 NODES
+    #                 <div style="font-family: monospace; font-weight: bold; color: #2980b9; align-items: center; justify-content: center;">
+    #                     {nodes}
+    #                 </div>
+    #             </div>
+    #             <div style="color: #666; font-size: 12px; align-items: center; justify-content: center;">
+    #                 CPUs
+    #                 <div style="font-weight: bold;">{cpu_cores} <br>{cpu_per_node}/Node </div>
+    #             </div>
+    #             <div style="color: #666; font-size: 12px; align-items: center; justify-content: center;">
+    #                 MEMORY
+    #                 <div style="font-weight: bold;">{memory} MB <br> {memory_per_node} MB/Node</div>
+    #             </div>
+    #         </div>
 
     @classmethod
     def generate_viz_template(
@@ -306,53 +417,59 @@ class HTMLGenerator:
         )
         
         node_id = slurm_info.get_nodes_list()[0]
+        # return cls.generate_slurm_info(slurm_info)
+        return cls.generate_slurm_visualization(
+            title="Slurm Job",
+            card_type="Physical Node",
+            is_root=True,
+            resources="Cores: {} | Memory: {}"
+        )
+        # return f"""
+        # <div style="
+        #     border: 3px solid #444;
+        #     border-radius: 10px;
+        #     width: 95%;
+        #     height: 700px;
+        #     overflow-y: scroll;
+        #     background: #f0f0f0;
+        #     display: flex;
+        #     flex-direction: column;
+        #     padding: 0px;
+        #     font-family: sans-serif;
+        # ">
+        #     {cls.generate_slurm_info(slurm_info)}
 
-        return f"""
-        <div style="
-            border: 3px solid #444;
-            border-radius: 0px;
-            width: 95%;
-            height: 700px;
-            overflow-y: scroll;
-            background: #f0f0f0;
-            display: flex;
-            flex-direction: column;
-            padding: 10px;
-            font-family: sans-serif;
-        ">
-            {cls.generate_slurm_info(slurm_info)}
-
-            <div style="
-                display: flex;
-                flex-direction: row;
-                justify-content: space-between;
-                width: 100%;
-                gap: 0px;
-                margin-top: 0px;
-                height: fit-content;
-                min-height: 300px;
-                font-size: 10px;
-                border: 2px solid #444;
-                border-radius: 0px;
-            ">
+        #     <div style="
+        #         display: flex;
+        #         flex-direction: row;
+        #         justify-content: space-between;
+        #         width: 100%;
+        #         gap: 0px;
+        #         margin-top: 0px;
+        #         height: fit-content;
+        #         min-height: 300px;
+        #         font-size: 10px;
+        #         border: 2px solid #444;
+        #         border-radius: 0px;
+        #     ">
                 
-                <div style="position: relative; left: 0; top: 0; bottom: 0; width: 20px;
-                        display: flex; align-items: center; justify-content: center;
-                        writing-mode: sideways-lr; text-orientation: mixed;
-                        background: gray; color: black; font-weight: bold;">
-                    {node_id}
-                </div>
+        #         <div style="position: relative; left: 0; top: 0; bottom: 0; width: 20px;
+        #                 display: flex; justify-content: center;
+        #                 writing-mode: sideways-lr; text-orientation: mixed;
+        #                 background: gray; color: black; font-weight: bold;">
+        #             {node_id}
+        #         </div>
 
-                <div style="width: 50%; display: flex; flex-direction: column; gap: 0px; height: 100%; align-items: center;">
-                    {cpu_section}
-                </div>
+        #         <div style="width: 50%; display: flex; flex-direction: column; gap: 0px;">
+        #             {cpu_section}
+        #         </div>
 
-                <div style="width: 50%; display: flex; flex-direction: column; gap: 0px; height: 100%; align-items: center;">
-                    {mem_section}
-                </div>
-            </div>
-        </div>
-        """
+        #         <div style="width: 50%; display: flex; flex-direction: column; gap: 0px;">
+        #             {mem_section}
+        #         </div>
+        #     </div>
+        # </div>
+        # """
 
     @classmethod
     def _generate_resource_section(
