@@ -52,8 +52,12 @@ class GUIUtils:
     - Starting and stopping clusters
     """
 
-    def __init__(self):
-        """Initialize the GUI utilities."""
+    def __init__(self, default_framework: str | None = None):
+        """Initialize the GUI utilities.
+
+        Args:
+            default_framework: Optional framework name to pre-select.
+        """
         self.is_config_set = False
         self.user = os.environ.get("USER", "unknown")
         self.cluster_name = socket.getfqdn().strip()
@@ -70,6 +74,12 @@ class GUIUtils:
         # Display widget
         self.wdg_viz_display = widgets.HTML()
 
+        # Main container (exposed for embedding in other UIs)
+        self.main_container: widgets.Widget | None = None
+
+        # Default framework override
+        self._default_framework = default_framework
+
         # Debug flag
         self._debug_set_slurm_true = False
         if self._debug_set_slurm_true:
@@ -79,12 +89,23 @@ class GUIUtils:
     # Public API
     # =========================================================================
 
-    def launch_gui_config(self) -> None:
-        """Launch the main configuration GUI."""
+    def launch_gui_config(self, display_gui: bool = True) -> widgets.VBox:
+        """Launch the main configuration GUI.
+
+        Args:
+            display_gui: If True, automatically display the GUI. If False,
+                build and store the widget without displaying it.
+
+        Returns:
+            The top-level VBox widget containing the full GUI.
+        """
         self._create_widgets()
         self._attach_widget_observers()
         self._setup_visualization_triggers()
-        self._assemble_and_display_gui()
+        self.main_container = self._assemble_gui()
+        if display_gui:
+            display(self.main_container)
+        return self.main_container
 
     def update_process_viz(self, change: Optional[Any] = None) -> None:
         """Update the process visualization display."""
@@ -132,15 +153,16 @@ class GUIUtils:
                 else:
                     logger.info(message)
 
-
-
-    def set_environment(self, b: widgets.Button) -> None:
+    def _set_environment(
+            self,
+            # b: widgets.Button
+            ) -> None:
         """Set up the environment when the load button is clicked."""
         self._log("Load button clicked!", "debug")
 
-        self._set_load_button_processing()
+        #self._set_load_button_processing()
 
-        self.widgets["output_area"].clear_output()
+        #self.widgets["output_area"].clear_output()
         self._log(f"Setting environment for {self.get_selected_framework_name()}...")
 
         try:
@@ -155,8 +177,8 @@ class GUIUtils:
             
         except Exception as e:
             self._handle_setup_error(e)
-        finally:
-            self.widgets["load_button"].disabled = False
+        # finally:
+        #     self.widgets["load_button"].disabled = False
             
 
         
@@ -199,7 +221,7 @@ class GUIUtils:
         self.widgets["executor_memory"] = self._create_executor_memory_widget()
 
         self.widgets["randomize_port"] = self._create_randomize_port_widget()
-        self.widgets["load_button"] = self._create_load_button()
+        # self.widgets["load_button"] = self._create_load_button()
         self.widgets["output_area"] = self._create_output_area()
 
         self.widgets["start_cluster"] = self._create_start_cluster_button()
@@ -207,7 +229,9 @@ class GUIUtils:
 
         self.widgets["metric_dashboard"] = self._create_metric_dashboard()
         self.widgets["framework_gui"] = self._create_framework_web_gui()
-
+        
+        
+        
     def _create_framework_web_gui(self) -> widgets.HBox:
         """Create a panel with simple buttons to open framework web UIs.
 
@@ -227,25 +251,13 @@ class GUIUtils:
         web_ui_links = fw_config.web_ui_links if fw_config else None
 
         def make_link_row(url: str, title: str) -> widgets.VBox:
-            link_html = f"""
-            <a href="{url}" target="_blank" style="text-decoration:none;">
-                <button class="p-Widget jupyter-widgets jupyter-button widget-button mod-primary" 
-                        style="width:160px; height:32px; cursor:pointer;">
-                    Open {title}
-                </button>
-            </a>
-            """
-            btn_widget = widgets.HTML(value=link_html)
+            btn_widget = WidgetFactory.create_styled_button_redirect(
+                description=f"Open {title}",
+                url=url,
+            )
+            btn_widget = WidgetFactory.update_widget_state(btn_widget,disable=True)
             
-            link_lbl = widgets.HTML(
-                value=f"<a href='{url}' target='_blank' style='margin-left:8px;'>{url}</a>"
-            )
-
-            return widgets.VBox(
-                [btn_widget, link_lbl],
-                layout=widgets.Layout(align_items="center", margin="4px 0"),
-            )
-
+            return btn_widget
         if web_ui_links:
             for port, title in web_ui_links:
                 url = f"{base_url}:{port}/"
@@ -264,17 +276,22 @@ class GUIUtils:
             )
             ssh_cmd = f"ssh {self.slurm_info.user}@{self.slurm_info.login_node} {ssh_parts} <jump-host>"
 
-            instructions = f"""
+            instructions_html = f"""
             <div style="padding:10px; margin-top:10px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-family:monospace; font-size:12px;">
               <b>Remote environment detected</b><br/>
               If above links do not open in your local browser, set up SSH port forwarding:
               <pre style="background:#f7f7f7; padding:8px; border-radius:3px; margin:6px 0;">{ssh_cmd}</pre>
             </div>
             """
+            instructions_widget = widgets.HTML(value=instructions_html)
+            instructions_widget = WidgetFactory.update_widget_state(instructions_widget,disable=True)
+            
         return widgets.VBox(
             [
+                self._create_header("Framework GUI"),
                 widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
-                widgets.HTML(value=instructions)
+                instructions_widget
+                
             ],layout=widgets.Layout(width="100%", padding="8px")
         )
 
@@ -285,9 +302,10 @@ class GUIUtils:
     def _create_framework_widget(self) -> widgets.Dropdown:
         """Create the framework selection widget."""
         framework_list = list(FRAMEWORK_REGISTRY.keys())
+        default_value = self._default_framework if self._default_framework in framework_list else framework_list[0]
         return WidgetFactory.create_dropdown(
             options=framework_list,
-            value=framework_list[0],
+            value=default_value,
             description="Framework:",
         )
 
@@ -303,7 +321,7 @@ class GUIUtils:
 
             return widgets.Image(
                 value=img_content,
-                format="svg+xml",
+                # format="svg+xml",
                 width=100,
                 height=100,
             )
@@ -333,7 +351,6 @@ class GUIUtils:
         checkbox.observe(toggle_path_input, names="value")
 
         return widgets.HBox([checkbox, path_input])
-
 
     def _create_template_widget(self) -> widgets.VBox:
         """Create the template selection widget."""
@@ -397,13 +414,16 @@ class GUIUtils:
     def _create_driver_cpu_widget(self) -> widgets.IntSlider:
         """Create the driver CPU slider widget."""
         fw_name = self.get_selected_framework_name() or "SPARK"
-        default_cpu_worker = FRAMEWORK_REGISTRY[fw_name].default_resources.get("cpu_worker", 1)
+        try:
+            default_cpu_worker = FRAMEWORK_REGISTRY[fw_name].default_resources.get("cpu_worker", 1)
+        except:
+            default_cpu_worker = 1
         
         return WidgetFactory.create_slider(
             value=1,
             min_val=1,
             max_val=self.slurm_info.get_cpus_per_node() - default_cpu_worker,
-            description="CPUs for Driver:",
+            description="Coordinator Cores:",
         )
 
     def _create_worker_cpu_widget(self) -> widgets.IntSlider:
@@ -412,17 +432,20 @@ class GUIUtils:
             value=1,
             min_val=1,
             max_val=self.slurm_info.get_cpus_per_node() - self.get_selected_driver_cpu(),
-            description="CPUs/worker:",
+            description="Cores Pool / Node:",
+            tooltip='The number of CPU cores assigned to each node. This determines maximum cores to be made available for compute units on one node.\n- Spark: SPARK_WORKER_CORES\n- Flink: taskmanager.cpu.cores',
         )
 
     def _create_executor_cpu_widget(self) -> widgets.IntSlider:
-        """Create the executor CPU slider widget."""
+        """Create the executor Cores slider widget."""
         return WidgetFactory.create_slider(
             value=1,
             min_val=1,
             max_val=self.get_selected_worker_cpu(),
             step=1,
-            description="CPUs/executor:",
+            description="Cores / Compute Units:",
+            tooltip="""The number of CPU cores assigned to each individual compute unit from the total pool set in "Core Pool per Node." This determines how many parallel compute units can be initialized on each node.\n- Spark: SPARK_EXECUTOR_CORES\n- Flink: taskmanager.numberOfTaskSlots""",
+            
         )
 
     def _create_driver_memory_widget(self) -> widgets.IntSlider:
@@ -437,7 +460,7 @@ class GUIUtils:
             min_val=value,
             max_val=self.slurm_info.get_memory_per_node() - mem_worker,
             step=128,
-            description="Driver Memory (MB):",
+            description="Coordinator Memory (MB):",
         )
 
     def _create_worker_memory_widget(self) -> widgets.IntSlider:
@@ -450,7 +473,7 @@ class GUIUtils:
             min_val=value,
             max_val=self.slurm_info.get_memory_per_node() - self.get_selected_driver_memory_val(),
             step=128,
-            description="Memory/worker (MB):",
+            description="Memory Pool / Node (MB):",
         )
 
     def _create_executor_memory_widget(self) -> widgets.IntSlider:
@@ -463,7 +486,7 @@ class GUIUtils:
             min_val=value,
             max_val=self.get_selected_worker_memory_val(),
             step=128,
-            description="Memory/executor (MB):",
+            description="Memory / Compute Unit (MB):",
         )
 
     def _create_randomize_port_widget(self) -> widgets.Checkbox:
@@ -473,15 +496,15 @@ class GUIUtils:
             description="Randomize Master Port",
         )
 
-    def _create_load_button(self) -> widgets.Button:
-        """Create the load button widget."""
-        button = widgets.Button(
-            description="Load to Environment",
-            button_style="info",
-            layout=widgets.Layout(width="80%", margin="20px auto 0 auto", alignment="center"),
-        )
-        button.on_click(self.set_environment)
-        return button
+    # def _create_load_button(self) -> widgets.Button:
+    #     """Create the load button widget."""
+    #     button = widgets.Button(
+    #         description="Load to Environment",
+    #         button_style="info",
+    #         layout=widgets.Layout(width="80%", margin="20px auto 0 auto", alignment="center"),
+    #     )
+    #     button.on_click(self._set_environment)
+    #     return button
 
     def _create_start_cluster_button(self) -> widgets.Button:
         """Create the start cluster button widget."""
@@ -489,7 +512,8 @@ class GUIUtils:
             description="Start Cluster",
             layout_overrides={"width": "40%", "color": "white"},
         )
-        button.disabled = not self.is_config_set
+        # button.disabled = not self.is_config_set
+        button.disabled = False
         button.on_click(self._on_start_cluster_clicked)
         return button
 
@@ -523,15 +547,12 @@ class GUIUtils:
                 height="200px",
                 max_height="200px",
                 overflow="auto",
-                background_color="#333333",
-                color="white",
                 border="2px solid #555555",
-                border_radius="4px",
-                padding="8px",
             )
         )
         # Add custom class for CSS targeting
-        output_widget.add_class("wrapped-output")
+        output_widget.add_class("log")
+        output_widget.add_class("id-log")
         return output_widget
 
 
@@ -562,9 +583,9 @@ class GUIUtils:
 
         # Set up dynamic range updates
         self._setup_dynamic_ranges()
-
+        
+        self.widgets["framework"].observe(self._create_logo_widget, names="value")
         self.widgets["framework"].observe(self._update_framework_home_labels, names="value")
-
 
     def _setup_dynamic_ranges(self) -> None:
         """Set up dynamic widget range interdependencies."""
@@ -603,9 +624,9 @@ class GUIUtils:
 
     def _on_parameters_changed(self, change: Dict[str, Any]) -> None:
         """Handle parameter changes."""
-        self.widgets["load_button"].button_style = "warning"
-        self.widgets["load_button"].description = "⟳ Apply Changes"
-        self.widgets["output_area"].clear_output()
+        # self.widgets["load_button"].button_style = "warning"
+        # self.widgets["load_button"].description = "⟳ Apply Changes"
+        # self.widgets["output_area"].clear_output()
         self.is_config_set = False
 
     def _update_worker_cpu_range(self, change: Dict[str, Any]) -> None:
@@ -624,20 +645,22 @@ class GUIUtils:
 
     def _update_executor_memory_max(self, change: Dict[str, Any]) -> None:
         """Update executor memory max based on worker memory."""
-        self.widgets["executor_memory"].max = change["new"]
+        tmp = change["new"]
+        self.widgets["executor_memory"].max = tmp
 
     def _on_start_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle start cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
         try:
             with self.widgets["output_area"]:
+                self._set_environment()
                 self._last_cluster_result = self.bdm.start_cluster()
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
-
+            self._toggle_framework_gui_btns(disabled=False)
         except Exception as e:
             tb = traceback.format_exc()
             self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
-            self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
+            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
 
     def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle stop cluster button click."""
@@ -647,6 +670,7 @@ class GUIUtils:
             with self.widgets["output_area"]:
                 self._last_cluster_result = self.bdm.stop_cluster()
                 self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
+                self._toggle_framework_gui_btns(disabled=True)
         except Exception as e:
             self._log(f"Failed to stop cluster:{e}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
@@ -668,25 +692,34 @@ class GUIUtils:
         if stop_disabled is not None:
             self.widgets["stop_cluster"].disabled = stop_disabled
 
+    def _toggle_framework_gui_btns(self,disabled: bool) -> None:
+        """Toggle cluster button states."""
+        fw_gui_btns = self.widgets["framework_gui"].children[1]
+        for wdg_i in fw_gui_btns.children:
+            wdg_i = WidgetFactory.update_widget_state(wdg_i,disable=disabled)
+    
     def _update_framework_home_labels(self, change: Dict[str, Any]) -> None:
         """Update framework home widget labels when framework changes."""
-        fw_name = change["new"].upper()
-        framework_home_widget = self.widgets.get("framework_home")
-        
-        if framework_home_widget and len(framework_home_widget.children) >= 2:
-            checkbox = framework_home_widget.children[0]
-            path_input = framework_home_widget.children[1]
+        try:
+            self._log("here")
+            fw_name = change["new"].upper()
+            framework_home_widget = self.widgets.get("framework_home")
             
-            # Update checkbox description
-            checkbox.description = f"Use custom {fw_name}_HOME : "
+            if framework_home_widget and len(framework_home_widget.children) >= 2:
+                checkbox = framework_home_widget.children[0]
+                path_input = framework_home_widget.children[1]
+                
+                # Update checkbox description
+                checkbox.description = f"Use custom {fw_name}_HOME : "
+        except Exception as e:
+            print(e)
             
-
     # =========================================================================
     # GUI Assembly
     # =========================================================================
 
-    def _assemble_and_display_gui(self) -> None:
-        """Assemble and display the complete GUI."""
+    def _assemble_gui(self) -> widgets.VBox:
+        """Assemble the complete GUI widget tree and return it."""
         config_container = self._create_config_container()
         viz_container = self._create_viz_container()
 
@@ -703,74 +736,77 @@ class GUIUtils:
         )
 
         row2 = widgets.VBox(
-            [self.widgets["start_cluster"], self.widgets["stop_cluster"]],
+            [
+                self._create_header(title="Cluster Control"),
+                self.widgets["start_cluster"],
+                self.widgets["stop_cluster"]
+            ],
             layout=widgets.Layout(
                 display="flex",
                 flex_flow="row",
-                width="100%",
-                max_width="100%",
+                # margin="10px"
                 justify_content="space-around",
             ),
         )
+        row2.add_class("sub-container")
 
         row3 = widgets.VBox([
             self.widgets["framework_gui"],
+        ])
+        row3.add_class("sub-container")
+
+        row4 = widgets.VBox([
             self._create_header(title="Metric Dashboard"),
             self.widgets["metric_dashboard"]
         ])
+        row4.add_class("sub-container")
+        
 
         
         # Inject CSS for text wrapping in output area
         style_html = """
         <style>
-        .wrapped-output pre {
+        .main-container {
+            padding: 10px;
+            border-radius: 10px;
+            /* background-image: linear-gradient( 179.6deg,  rgba(0,19,26,1) -4.9%, rgba(0,77,105,1) 108.4% ) !important; */
+            background: #0f2d56 !important;
+        }
+        .sub-container {
+            padding: 20px;
+            margin: 5px;
+            border-radius: 10px;
+            background: #bbdefb !important;
+        }
+        .log {
             white-space: pre-wrap !important;
             word-wrap: break-word !important;
             overflow-wrap: break-word !important;
             max-width: 100% !important;
-            background-color:"#333333";
-            color:"white";
-        }
-        .wrapped-output .jp-OutputArea-output pre {
-            white-space: pre-wrap !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
-            background-color:"#333333";
-            color:"white";
+            background: #bbdefb !important;
+            display: flex;
         }
         </style>
         <script>
-        function scrollToBottom() {
-            var outputArea = document.querySelector('.jp-OutputArea-output');
-            if (outputArea) {
-                outputArea.scrollTop = outputArea.scrollHeight;
-            }
-        }
-        // Scroll immediately and after any DOM changes
-        scrollToBottom();
-        var observer = new MutationObserver(scrollToBottom);
-        document.addEventListener('DOMContentLoaded', function() {
-            observer.observe(document.body, { childList: true, subtree: true });
-            setInterval(scrollToBottom, 500);
-        });
+        var el = document.querySelector('.id-log');
+        if (el) el.scrollTop = el.scrollHeight;
         </script>
         """
+        
         style_widget = widgets.HTML(value=style_html)
 
-        main_container = widgets.VBox(
-            [style_widget, row1, row2, row3, self.widgets["output_area"]],
+        main_container : widgets.VBox = widgets.VBox(
+            [style_widget, row1, row2, row3,row4, self.widgets["output_area"]],
             layout=widgets.Layout(
                 display="flex",
                 flex_flow="column",
                 width="100%",
-                max_width="100%",
-                border="2px solid #444444",
-                border_radius="100px",
-                background_color="#ffffff",
+                max_width="100%"
             ),
         )
-
-        display(main_container)
+        main_container.add_class("main-container")
+        main_container.add_class("id-main-container")
+        return main_container
 
     def _create_config_container(self) -> widgets.VBox:
         """Create the configuration panel container."""
@@ -790,35 +826,37 @@ class GUIUtils:
             self.widgets["worker_memory"],
             self.widgets["executor_memory"],
             self.widgets["randomize_port"],
-            self.widgets["load_button"],
+            # self.widgets["load_button"],
         ]
+        self.widgets["config_wdg"] = config_widgets
 
-        return widgets.VBox(
+        wdg = widgets.VBox(
             config_widgets,
             layout=widgets.Layout(
-                width="50%",
-                padding="20px",
+                width="49%",
                 display="flex",
                 flex_flow="column",
-                margin="10px auto",
                 align_items="stretch",
                 align_content="stretch",
             ),
         )
+        wdg.add_class("sub-container")
+        return wdg
 
     def _create_viz_container(self) -> widgets.VBox:
         """Create the visualization panel container."""
-        return widgets.VBox(
+        wdg = widgets.VBox(
             [self.widgets["header_viz"], self.wdg_viz_display],
             layout=widgets.Layout(
-                width="50%",
-                padding="20px",
+                width="49%",
                 display="flex",
                 flex_flow="column",
-                margin="10px 0px",
                 align_items="stretch",
             ),
         )
+        wdg.add_class("sub-container")
+        return wdg
+        
 
     # =========================================================================
     # Value Getters
@@ -992,11 +1030,11 @@ class GUIUtils:
     # Environment Setup
     # =========================================================================
 
-    def _set_load_button_processing(self) -> None:
-        """Set load button to processing state."""
-        self.widgets["load_button"].disabled = True
-        self.widgets["load_button"].description = "Processing..."
-        self.widgets["load_button"].button_style = "warning"
+    # def _set_load_button_processing(self) -> None:
+    #     """Set load button to processing state."""
+    #     self.widgets["load_button"].disabled = True
+    #     self.widgets["load_button"].description = "Processing..."
+    #     self.widgets["load_button"].button_style = "warning"
     
     def _set_default_fw_config_template(self) -> None:
         fw_name = self.get_selected_framework_name()
@@ -1052,7 +1090,7 @@ class GUIUtils:
             self._update_env_file(env_updates)
             self._update_worker_file()
 
-            self._set_load_button_success()
+            # self._set_load_button_success()
             self._log(f"Environment updated for {self.get_selected_framework_name()}!","info")
             self.is_config_set = True
             self._toggle_cluster_buttons(start_disabled=False)
@@ -1119,7 +1157,6 @@ class GUIUtils:
         with open(file_path, "w") as f:
             f.write(content)
 
-
     def _update_worker_file(self) -> None:
         """Update the Spark worker file."""
         worker_file_path = os.path.join(
@@ -1135,22 +1172,22 @@ class GUIUtils:
         self._log(f"FATAL ERROR: {str(error)}")
         tb = traceback.format_exc()
         self._log(tb, msg_type="error")
-        self._set_load_button_failed()
+        # self._set_load_button_failed()
         self.is_config_set = False
-        self._toggle_cluster_buttons(all_disabled=False)
+        self._toggle_cluster_buttons(start_disabled=False,stop_disabled=True)
 
-    def _set_load_button_success(self) -> None:
-        """Set load button to success state."""
-        button = self.widgets["load_button"]
-        button.button_style = "success"
-        button.description = "Success!"
-        button.disabled = False
+    # def _set_load_button_success(self) -> None:
+    #     """Set load button to success state."""
+    #     button = self.widgets["load_button"]
+    #     button.button_style = "success"
+    #     button.description = "Success!"
+    #     button.disabled = False
 
-    def _set_load_button_failed(self) -> None:
-        """Set load button to failed state."""
-        button = self.widgets["load_button"]
-        button.button_style = "danger"
-        button.description = "Failed"
+    # def _set_load_button_failed(self) -> None:
+    #     """Set load button to failed state."""
+    #     button = self.widgets["load_button"]
+    #     button.button_style = "danger"
+    #     button.description = "Failed"
 
     def _initialize_big_data_manager(self) -> None:
         """Initialize the BigDataManager with user input."""

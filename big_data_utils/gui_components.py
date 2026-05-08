@@ -12,6 +12,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import os
 import ipywidgets as widgets
+from IPython.display import display, Javascript
+import re
+# from bs4 import BeautifulSoup as bs
+
 import requests
 
 from .slurm_utils import SlurmManager
@@ -36,7 +40,7 @@ DEFAULT_LABEL_STYLE = {
     "font_weight": "bold",
     "color": "#333333",
     "font_size": "14px",
-    "description_width": "150px",
+    "description_width": "200px",
 }
 
 DEFAULT_WIDGET_LAYOUT = widgets.Layout(
@@ -148,6 +152,14 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
         logo_url="https://flink.apache.org/img/logo/png/200/flink_squirrel_200_color.png",
         worker_file="workers",
         default_master_port=8081,
+        default_resources={
+            "mem_driver": 1000,
+            "mem_worker": 1000,
+            "mem_executor": 1000,
+            "cpu_driver": 1,
+            "cpu_worker": 1,
+            "cpu_executor": 1,
+        },
         web_ui_links=[
             ("8081", "Flink UI"),
         ],
@@ -166,11 +178,11 @@ class HTMLGenerator:
     def generate_header(title: str) -> str:
         """Generate HTML header with title."""
         return f"""
-        <div style="display: block; justify-content: center; align-items: center; gap: 10px; width: 100%;">
-          <h2 style="color: #2196F3; text-align: center;">{title}</h2><hr>
+        <div style="display: flex; justify-content: center; align-items: center; margin-top: 0px;">
+          <h2 style="color: #0f2d56; text-align: center;">{title}</h2>
         </div>
         """
-
+    
     @staticmethod
     def generate_process_style(height: str, background: str, text_color: str) -> str:
         """Generate CSS style for process block."""
@@ -420,6 +432,44 @@ class WidgetFactory:
             layout=widgets.Layout(**final_layout),
             **button_kwargs,
         )
+    
+    @staticmethod
+    def create_styled_button_redirect(
+    url: str,
+    description: str,
+    style_overrides: Optional[Dict[str, Any]] = None,
+    layout_overrides: Optional[Dict[str, Any]] = None,
+    **button_kwargs,
+    ) -> widgets.Button:
+        link_html = f"""
+            <a href="{url}" target="_blank" style="text-decoration:none;">
+                <button class="p-Widget jupyter-widgets jupyter-button widget-button mod-primary" 
+                        style="width:160px; height:32px; cursor:pointer;" title="Open {url}">
+                    {description}
+                </button>
+            </a>
+            """
+        button = widgets.HTML(value=link_html)
+        return button
+    
+    @staticmethod
+    def update_widget_state(widget, disable=False):
+        # Get current HTML
+        current_html = widget.value
+        
+        # Remove any existing 'disabled' attribute to prevent duplicates
+        # This looks for ' disabled' followed by a space or the end of the tag
+        clean_html = re.sub(r'\s+disabled(?=[\s>])', '', current_html)
+        
+        if disable:
+            # Insert 'disabled' right before the first '>' of the button tag
+            new_html = re.sub(r'(<button[^>]*)(>)', r'\1 disabled\2', clean_html)
+        else:
+            new_html = clean_html
+            
+        # Put it back into the widget
+        widget.value = new_html
+        return widget
 
     @staticmethod
     def create_slider(
@@ -427,6 +477,7 @@ class WidgetFactory:
         min_val: int,
         max_val: int,
         description: str,
+        tooltip: str = None,
         step: int = 1,
         label_style: Optional[Dict[str, str]] = None,
         layout: Optional[widgets.Layout] = None,
@@ -434,6 +485,8 @@ class WidgetFactory:
         """Create a standardized IntSlider widget."""
         slider_style = label_style or DEFAULT_LABEL_STYLE
         slider_style["handle_color"] = "blue"
+        if not tooltip:
+            tooltip = description
         return widgets.IntSlider(
             value=value,
             min=min_val,
@@ -442,6 +495,7 @@ class WidgetFactory:
             description=description,
             style=slider_style,
             layout=layout or DEFAULT_WIDGET_LAYOUT,
+            tooltip = tooltip
         )
 
     @staticmethod

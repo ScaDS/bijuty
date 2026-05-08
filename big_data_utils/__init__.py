@@ -29,6 +29,7 @@ from .gui_components import (
     ResourceAllocation,
     COLOR_SCHEME,
 )
+from .multi_framework_manager import MultiFrameworkManager
 
 __all__ = [
     "GUIUtils",
@@ -38,6 +39,8 @@ __all__ = [
     "FrameworkConfig",
     "ResourceAllocation",
     "COLOR_SCHEME",
+    "MultiFrameworkManager",
 ]
 
-GUIUtils().launch_gui_config()
+#GUIUtils().launch_gui_config()
+MultiFrameworkManager().display()

@@ -236,15 +236,10 @@ class BigDataManager:
             conf_dest: Configuration destination directory
             conf_template: Path to configuration template
             randomize_ports: Whether to randomize master ports
-
-        Raises:
-            NotInitializedError: If manager hasn't been initialized
-            ClusterConfigurationError: If configuration setup fails
         """
         if not self._initialized:
-            raise NotInitializedError(
-                "BigDataManager must be initialized before setup_config"
-            )
+            logger.error("BigDataManager must be initialized before setup_config")
+            return 1
 
         self._conf_dest = parse_path(conf_dest) if conf_dest else None
         self._conf_template = parse_path(conf_template) if conf_template else None
@@ -624,7 +619,8 @@ class BigDataManager:
         """
         
         if not self._initialized:
-            raise NotInitializedError("Manager must be initialized before starting cluster")
+            logger.error("BigDataManager must be initialized before setup_config")
+            return 1
         
         # Stop existing cluster if running
         if self.is_cluster_up():    
@@ -670,7 +666,8 @@ class BigDataManager:
             NotInitializedError: If manager hasn't been initialized
         """
         if not self._initialized:
-            raise NotInitializedError("Manager must be initialized before stopping cluster")
+            logger.error("Manager must be initialized before stopping cluster")
+            return 1
 
         logger.info(f"Stopping {self._user_inputs.fw_name} cluster")
 
