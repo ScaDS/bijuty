@@ -1,0 +1,113 @@
+.main-container {
+  padding: 10px;
+  border-radius: 10px;
+  /* background-image: linear-gradient( 179.6deg,  rgba(0,19,26,1) -4.9%, rgba(0,77,105,1) 108.4% ) !important; */
+  background: #0f2d56 !important;
+}
+.sub-container {
+  padding: 20px;
+  margin: 5px;
+  border-radius: 10px;
+  background: #bbdefb !important;
+}
+.log {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  max-width: 100% !important;
+  background: #bbdefb !important;
+  display: flex;
+}
+
+/* .slurm-container {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1400px;
+  height: 800px;
+  margin: 0 auto;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+} */
+
+.slurm-card {
+  /* Dynamic accent mapping using modern CSS color-mix */
+  --slurm-bg: color-mix(in srgb, var(--slurm-primary) 8%, #ffffff);
+  --slurm-accent: color-mix(in srgb, var(--slurm-primary) 18%, #ffffff);
+
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px;
+  border: 2px solid var(--slurm-primary);
+  border-radius: 10px;
+  background: var(--slurm-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.slurm-card:hover {
+  box-shadow: 0 4px 12px
+    color-mix(in srgb, var(--slurm-primary) 100%, transparent);
+}
+
+.slurm-card_header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.slurm-card_title {
+  margin: 0;
+  color: var(--slurm-primary);
+  font-size: 1.15rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slurm-card_badge {
+  color: var(--slurm-primary);
+  background-color: var(--slurm-accent);
+  border: 1px dashed var(--slurm-primary);
+  border-radius: 10px;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.slurm-card_resources {
+  color: var(--slurm-primary);
+  font-size: 0.875rem;
+  margin: 0;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Grid layout for nested children */
+.slurm-card_children {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 15px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+/* Scale down nested elements slightly to reflect structural hierarchy */
+.slurm-card .slurm-card .slurm-card_title {
+  font-size: 1rem;
+}
+.slurm-card .slurm-card .slurm-card_resources {
+  font-size: 0.8rem;
+}

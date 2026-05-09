@@ -322,8 +322,8 @@ class GUIUtils:
             return widgets.Image(
                 value=img_content,
                 # format="svg+xml",
-                width=100,
-                height=100,
+                width=50,
+                height=50,
             )
         except Exception as e:
             self._log(f"Error loading logo: {e}",msg_type="error")
@@ -331,7 +331,7 @@ class GUIUtils:
 
     def _create_framework_home_widget(self) -> widgets.VBox:
         """Create checkbox and path input for FRAMEWORK_HOME (SPARK/FLINK)."""
-        fw_name = self.get_selected_framework_name() or "SPARK"
+        fw_name = self.get_selected_framework_name()
         label_text = f"Use custom {fw_name}_HOME : "
 
         checkbox = WidgetFactory.create_checkbox(
@@ -393,6 +393,8 @@ class GUIUtils:
             widgets.Checkbox(value=False, description=node, indent=False)
             for node in node_options
         ]
+        # Check 1st box by default
+        checkboxes[0].value = True
 
         checkbox_container = widgets.VBox(
             checkboxes,
@@ -405,6 +407,7 @@ class GUIUtils:
         def update_selection(change: Dict[str, Any]) -> None:
             selected = [cb.description for cb in checkboxes if cb.value]
             selected_display.value = f"<b>Selected:</b> {', '.join(selected) if selected else '<i>None</i>'}"
+            self.update_process_viz() # Trigger added to update process vizualization
 
         for cb in checkboxes:
             cb.observe(update_selection, names="value")
@@ -496,16 +499,6 @@ class GUIUtils:
             description="Randomize Master Port",
         )
 
-    # def _create_load_button(self) -> widgets.Button:
-    #     """Create the load button widget."""
-    #     button = widgets.Button(
-    #         description="Load to Environment",
-    #         button_style="info",
-    #         layout=widgets.Layout(width="80%", margin="20px auto 0 auto", alignment="center"),
-    #     )
-    #     button.on_click(self._set_environment)
-    #     return button
-
     def _create_start_cluster_button(self) -> widgets.Button:
         """Create the start cluster button widget."""
         button = WidgetFactory.create_styled_button(
@@ -569,6 +562,7 @@ class GUIUtils:
             self.widgets["destination"],
             self.widgets["master_host"],
             self.widgets["worker_hosts"],
+            self.widgets["worker_hosts"].children[0],
             self.widgets["driver_cpu"],
             self.widgets["worker_cpu"],
             self.widgets["executor_cpu"],
@@ -583,9 +577,6 @@ class GUIUtils:
 
         # Set up dynamic range updates
         self._setup_dynamic_ranges()
-        
-        self.widgets["framework"].observe(self._create_logo_widget, names="value")
-        self.widgets["framework"].observe(self._update_framework_home_labels, names="value")
 
     def _setup_dynamic_ranges(self) -> None:
         """Set up dynamic widget range interdependencies."""
@@ -608,6 +599,8 @@ class GUIUtils:
     def _setup_visualization_triggers(self) -> None:
         """Set up widgets that trigger visualization updates."""
         trigger_widgets = [
+            self.widgets["master_host"],
+            self.widgets["worker_hosts"],
             self.widgets["driver_cpu"],
             self.widgets["worker_cpu"],
             self.widgets["executor_cpu"],
@@ -624,10 +617,10 @@ class GUIUtils:
 
     def _on_parameters_changed(self, change: Dict[str, Any]) -> None:
         """Handle parameter changes."""
-        # self.widgets["load_button"].button_style = "warning"
-        # self.widgets["load_button"].description = "⟳ Apply Changes"
-        # self.widgets["output_area"].clear_output()
         self.is_config_set = False
+        self._update_framework_home_labels(change)
+        fw_logo_wdg = self.widgets["logo"] 
+        fw_logo_wdg.value = self._create_logo_widget().value
 
     def _update_worker_cpu_range(self, change: Dict[str, Any]) -> None:
         """Update worker CPU range based on driver CPU."""
@@ -701,8 +694,7 @@ class GUIUtils:
     def _update_framework_home_labels(self, change: Dict[str, Any]) -> None:
         """Update framework home widget labels when framework changes."""
         try:
-            self._log("here")
-            fw_name = change["new"].upper()
+            fw_name = self.get_selected_framework_name().upper()
             framework_home_widget = self.widgets.get("framework_home")
             
             if framework_home_widget and len(framework_home_widget.children) >= 2:
@@ -731,7 +723,7 @@ class GUIUtils:
                 width="100%",
                 max_width="100%",
                 overflow="hidden",
-                height="850px",
+                height="800px",
             ),
         )
 
@@ -805,7 +797,6 @@ class GUIUtils:
             self.widgets["worker_memory"],
             self.widgets["executor_memory"],
             self.widgets["randomize_port"],
-            # self.widgets["load_button"],
         ]
         self.widgets["config_wdg"] = config_widgets
 
@@ -987,18 +978,20 @@ class GUIUtils:
         executor_cpu_height = max((exe_cpu / wrk_cpu) * 100, 25) if wrk_cpu > 0 else 0
 
         return {
-            "total_mem": "100%",
-            "drv_mem_height": f"{master_mem_height:.1f}%",
-            "wrk_mem_height": f"{worker_mem_height:.1f}%",
-            "exe_mem_height": f"{executor_mem_height:.1f}%",
-            "total_mem_val": f"{int(node_mem_capacity)}MB",
-            "drv_mem_val": f"{int(drv_mem)}MB",
-            "wrk_mem_val": f"{int(wrk_mem)}MB",
-            "exe_mem_val": f"{int(exe_mem)}MB",
-            "total_cpu_height": "100%",
-            "drv_cpu_height": f"{master_cpu_height:.1f}%",
-            "wrk_cpu_height": f"{worker_cpu_height:.1f}%",
-            "exe_cpu_height": f"{executor_cpu_height:.1f}%",
+            # "total_mem": "100%",
+            "master_node": self.get_selected_master_host(),
+            "worker_node": self.get_selected_workers(),
+            # "drv_mem_height": f"{master_mem_height:.1f}%",
+            # "wrk_mem_height": f"{worker_mem_height:.1f}%",
+            # "exe_mem_height": f"{executor_mem_height:.1f}%",
+            "total_mem_val": f"{int(node_mem_capacity)}",
+            "drv_mem_val": f"{int(drv_mem)}",
+            "wrk_mem_val": f"{int(wrk_mem)}",
+            "exe_mem_val": f"{int(exe_mem)}",
+            # "total_cpu_height": "100%",
+            # "drv_cpu_height": f"{master_cpu_height:.1f}%",
+            # "wrk_cpu_height": f"{worker_cpu_height:.1f}%",
+            # "exe_cpu_height": f"{executor_cpu_height:.1f}%",
             "total_cpu_val": f"{int(node_cpu_capacity)}",
             "drv_cpu_val": f"{int(drv_cpu)}",
             "wrk_cpu_val": f"{int(wrk_cpu)}",
