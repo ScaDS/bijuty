@@ -28,6 +28,8 @@ from .gui_components import (
     WidgetFactory,
     create_placeholder_logo,
     fetch_image,
+    VBox,
+    HBox
 )
 from .slurm_utils import SlurmManager
 from .process_monitor import ProcessMonitor
@@ -89,7 +91,7 @@ class GUIUtils:
     # Public API
     # =========================================================================
 
-    def launch_gui_config(self, display_gui: bool = True) -> widgets.VBox:
+    def launch_gui_config(self, display_gui: bool = True) -> VBox:
         """Launch the main configuration GUI.
 
         Args:
@@ -250,7 +252,7 @@ class GUIUtils:
         fw_config = FRAMEWORK_REGISTRY.get(fw_name)
         web_ui_links = fw_config.web_ui_links if fw_config else None
 
-        def make_link_row(url: str, title: str) -> widgets.VBox:
+        def make_link_row(url: str, title: str) -> VBox:
             btn_widget = WidgetFactory.create_styled_button_redirect(
                 description=f"Open {title}",
                 url=url,
@@ -286,7 +288,7 @@ class GUIUtils:
             instructions_widget = widgets.HTML(value=instructions_html)
             instructions_widget = WidgetFactory.update_widget_state(instructions_widget,disable=True)
             
-        return widgets.VBox(
+        return VBox(
             [
                 self._create_header("Framework GUI"),
                 widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
@@ -329,10 +331,10 @@ class GUIUtils:
             self._log(f"Error loading logo: {e}",msg_type="error")
             return create_placeholder_logo()
 
-    def _create_framework_home_widget(self) -> widgets.VBox:
+    def _create_framework_home_widget(self) -> VBox:
         """Create checkbox and path input for FRAMEWORK_HOME (SPARK/FLINK)."""
         fw_name = self.get_selected_framework_name()
-        label_text = f"Use custom {fw_name}_HOME : "
+        label_text = f"Use custom {fw_name}_HOME"
 
         checkbox = WidgetFactory.create_checkbox(
             value=False,
@@ -343,6 +345,10 @@ class GUIUtils:
             value="",
             description=f"",
             disabled=True,
+            layout=widgets.Layout(
+                margin="0px 0px 0px 210px",
+                width="calc(100% - 210px)"
+            )
         )
 
         def toggle_path_input(change: Dict[str, Any]) -> None:
@@ -350,9 +356,9 @@ class GUIUtils:
 
         checkbox.observe(toggle_path_input, names="value")
 
-        return widgets.HBox([checkbox, path_input])
+        return widgets.VBox([checkbox, path_input])
 
-    def _create_template_widget(self) -> widgets.VBox:
+    def _create_template_widget(self) -> VBox:
         """Create the template selection widget."""
         checkbox = WidgetFactory.create_checkbox(
             value=True,
@@ -368,7 +374,7 @@ class GUIUtils:
             text.disabled = change["new"]
 
         checkbox.observe(toggle_default, names="value")
-        return widgets.VBox([checkbox, text])
+        return VBox([checkbox, text])
 
     def _create_destination_widget(self) -> widgets.Text:
         """Create the config destination path widget."""
@@ -386,7 +392,7 @@ class GUIUtils:
             description="Master Host:",
         )
 
-    def _create_worker_hosts_widget(self) -> widgets.VBox:
+    def _create_worker_hosts_widget(self) -> VBox:
         """Create the worker host selection widget."""
         node_options = self.slurm_info.get_nodes_list()
         checkboxes = [
@@ -396,7 +402,7 @@ class GUIUtils:
         # Check 1st box by default
         checkboxes[0].value = True
 
-        checkbox_container = widgets.VBox(
+        checkbox_container = VBox(
             checkboxes,
             layout=widgets.Layout(max_height="200px", overflow_y="auto", border="1px solid #ddd")
         )
@@ -412,7 +418,7 @@ class GUIUtils:
         for cb in checkboxes:
             cb.observe(update_selection, names="value")
 
-        return widgets.VBox([label, checkbox_container, selected_display])
+        return VBox([label, checkbox_container, selected_display])
 
     def _create_driver_cpu_widget(self) -> widgets.IntSlider:
         """Create the driver CPU slider widget."""
@@ -650,11 +656,13 @@ class GUIUtils:
                 self._last_cluster_result = self.bdm.start_cluster()
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
             self._toggle_framework_gui_btns(disabled=False)
+            self.row3.enable()
+            self.row4.enable()
         except Exception as e:
             tb = traceback.format_exc()
             self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
-
+        
     def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle stop cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
@@ -664,6 +672,8 @@ class GUIUtils:
                 self._last_cluster_result = self.bdm.stop_cluster()
                 self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
                 self._toggle_framework_gui_btns(disabled=True)
+                self.row3.disable()
+                self.row4.disable()
         except Exception as e:
             self._log(f"Failed to stop cluster:{e}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
@@ -702,7 +712,8 @@ class GUIUtils:
                 path_input = framework_home_widget.children[1]
                 
                 # Update checkbox description
-                checkbox.description = f"Use custom {fw_name}_HOME : "
+                checkbox.update_label(f"Use custom {fw_name}_HOME")
+
         except Exception as e:
             print(e)
             
@@ -710,12 +721,12 @@ class GUIUtils:
     # GUI Assembly
     # =========================================================================
 
-    def _assemble_gui(self) -> widgets.VBox:
+    def _assemble_gui(self) -> VBox:
         """Assemble the complete GUI widget tree and return it."""
         config_container = self._create_config_container()
         viz_container = self._create_viz_container()
 
-        row1 = widgets.HBox(
+        self.row1 = widgets.HBox(
             [config_container, viz_container],
             layout=widgets.Layout(
                 display="flex",
@@ -723,11 +734,15 @@ class GUIUtils:
                 width="100%",
                 max_width="100%",
                 overflow="hidden",
-                height="800px",
+                # height="800px",
+                justify_content="space-around",
+                margin="0px",
+                height="fit-content",
+                max_height="750"
             ),
         )
 
-        row2 = widgets.VBox(
+        self.row2 = VBox(
             [
                 self._create_header(title="Cluster Control"),
                 self.widgets["start_cluster"],
@@ -736,22 +751,26 @@ class GUIUtils:
             layout=widgets.Layout(
                 display="flex",
                 flex_flow="row",
-                # margin="10px"
+                #margin="0px",
                 justify_content="space-around",
             ),
         )
-        row2.add_class("sub-container")
+        self.row2.add_class("sub-container")
+        
 
-        row3 = widgets.VBox([
+
+        self.row3:VBox= VBox([
             self.widgets["framework_gui"],
         ])
-        row3.add_class("sub-container")
+        self.row3.add_class("sub-container")
+        self.row3.disable()
 
-        row4 = widgets.VBox([
-            self._create_header(title="Metric Dashboard"),
+        self.row4:VBox = VBox([
+            self._create_header(title="Performance Metric"),
             self.widgets["metric_dashboard"]
         ])
-        row4.add_class("sub-container")
+        self.row4.add_class("sub-container")
+        self.row4.disable()
         
         # Inject CSS for text wrapping in output area
         html_header_content = f"""
@@ -764,10 +783,10 @@ class GUIUtils:
         </script>
         """
         
-        style_widget = widgets.HTML(value=html_header_content)
+        self.style_widget = widgets.HTML(value=html_header_content)
 
-        main_container : widgets.VBox = widgets.VBox(
-            [style_widget, row1, row2, row3,row4, self.widgets["output_area"]],
+        main_container : VBox = VBox(
+            [self.style_widget, self.row1, self.row2, self.row3, self.row4, self.widgets["output_area"]],
             layout=widgets.Layout(
                 display="flex",
                 flex_flow="column",
@@ -779,7 +798,7 @@ class GUIUtils:
         main_container.add_class("id-main-container")
         return main_container
 
-    def _create_config_container(self) -> widgets.VBox:
+    def _create_config_container(self) -> VBox:
         """Create the configuration panel container."""
         config_widgets = [
             self.widgets["header_config"],
@@ -800,10 +819,10 @@ class GUIUtils:
         ]
         self.widgets["config_wdg"] = config_widgets
 
-        wdg = widgets.VBox(
+        wdg:VBox = VBox(
             config_widgets,
             layout=widgets.Layout(
-                width="49%",
+                width="50%",
                 display="flex",
                 flex_flow="column",
                 align_items="stretch",
@@ -813,15 +832,16 @@ class GUIUtils:
         wdg.add_class("sub-container")
         return wdg
 
-    def _create_viz_container(self) -> widgets.VBox:
+    def _create_viz_container(self) -> VBox:
         """Create the visualization panel container."""
-        wdg = widgets.VBox(
+        wdg = VBox(
             [self.widgets["header_viz"], self.wdg_viz_display],
             layout=widgets.Layout(
-                width="49%",
-                display="flex",
-                flex_flow="column",
-                align_items="stretch",
+                width="50%",
+                padding="40px",
+                # display="flex",
+                # flex_flow="column",
+                # align_items="stretch"
             ),
         )
         wdg.add_class("sub-container")
@@ -892,11 +912,12 @@ class GUIUtils:
         """Get the selected config destination path."""
         dest = self.widgets["destination"].value
         fw_name = self.get_selected_framework_name()
-        return os.path.join(dest, fw_name.lower())
+        conf_dest = os.path.join(dest, fw_name.lower())
+        return conf_dest
 
     def is_default_config_template(self) -> bool:
         template_widget = self.widgets["template"]
-        return template_widget.children[0].value
+        return template_widget.children[0].is_checked()
 
     def get_selected_config_template(self) -> str:
         """Get the selected config template path."""
@@ -948,6 +969,9 @@ class GUIUtils:
     def _set_framework_home(self) -> None:
         os.environ[f"{self.get_selected_framework_home()}_HOME"] = self.get_selected_framework_home()
     
+    def _create_conf_dest_dir(self) -> None:
+        print(os.path.dirname(self.get_selected_config_destination()))
+        os.makedirs(os.path.dirname(self.get_selected_config_destination()),exist_ok=True)
 
     # =========================================================================
     # Visualization Helpers
@@ -1008,23 +1032,26 @@ class GUIUtils:
     #     self.widgets["load_button"].description = "Processing..."
     #     self.widgets["load_button"].button_style = "warning"
     
-    def _set_default_fw_config_template(self) -> None:
+    def _set_fw_config_template(self) -> None:
         fw_name = self.get_selected_framework_name()
-        os.environ[f"{fw_name}_CONF_TEMPLATE"]= FRAMEWORK_REGISTRY[fw_name.upper()].default_template
+        if self.is_default_config_template():
+            fw_conf_template = FRAMEWORK_REGISTRY[fw_name.upper()].default_template
+        else:
+            fw_conf_template = self.get_selected_config_template()
+        os.environ[f"{fw_name}_CONF_TEMPLATE"] = fw_conf_template
     
     def _execute_framework_setup(self) -> None:
         """Execute the bash command to set up the framework."""
         self._set_framework_home()
-        self._set_default_fw_config_template()
+        self._set_fw_config_template()
+        self._create_conf_dest_dir()
 
         fw_name = shlex.quote(self.get_selected_framework_name().lower())
         template = shlex.quote(self.get_selected_config_template())
         dest = shlex.quote(
-            str(self.get_selected_config_destination()).replace(
-                self.get_selected_framework_name().lower(), ""
-            )
+            os.path.dirname(self.get_selected_config_destination())
         )
-
+        
         script_dir = os.path.dirname(os.path.abspath(__file__))
         
         bash_command = (
@@ -1036,8 +1063,9 @@ class GUIUtils:
         )
 
         start_time = time.time()
+        self._log(f"Initializing configuration at: {dest}")
+        self._log(bash_command,"debug")
         res = run_bash_command(bash_command, shell=True, timeout=6000)
-       
         elapsed = time.time() - start_time
         self._log(f"Time elapsed for config init: {elapsed:.2f} seconds","debug")
 

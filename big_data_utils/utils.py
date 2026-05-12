@@ -231,3 +231,7 @@ def get_file_content(file_path):
         return "Error: The file was not found."
     except Exception as e:
         return f"An error occurred: {e}"
+    
+def debug_write_to_file(content="here", file_path="./tmp.txt"):
+    with open(file_path, "a") as f:
+        f.write(content)

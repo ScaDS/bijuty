@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import os
 import ipywidgets as widgets
+from traitlets import Bool
 from IPython.display import display, Javascript
 import re
 # from bs4 import BeautifulSoup as bs
@@ -119,12 +120,12 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
         name="SPARK",
         start_cmd="sbin/start-all.sh", # relative to framework home dir
         stop_cmd="sbin/stop-all.sh",   # relative to framework home dir
-        proc_master="org.apache.spark.deploy.master.Master --host",
-        proc_worker="org.apache.spark.deploy.worker.Worker --webui-port",
+        proc_master={"title":"Master","pattern":"org.apache.spark.deploy.master.Master --host"},
+        proc_worker={"title":"Worker","pattern":"org.apache.spark.deploy.worker.Worker --webui-port"},
         proc_other=[
-            "org.apache.spark.deploy.SparkSubmit",
-            "org.apache.spark.executor.CoarseGrainedExecutorBackend",
-            "org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend",
+            {"title":"SparkSubmit","pattern":"org.apache.spark.deploy.SparkSubmit"},
+            {"title":"Executor","pattern":"org.apache.spark.executor.CoarseGrainedExecutorBackend"},
+            {"title":"Scheduler","pattern":"org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend"},
         ],
         logo_url="https://spark.apache.org/images/spark-logo-back.png",
         worker_file="workers",
@@ -230,7 +231,7 @@ class HTMLGenerator:
 
         # Build individual card block with an inline style to pass the custom primary color
         card_html = f"""
-        <section class="slurm-card" style="--slurm-primary: {color};" aria-label="{title} Info">
+        <div class="slurm-card" style="--slurm-primary: {color};" aria-label="{title} Info">
         <header class="slurm-card_header">
             <h2 class="slurm-card_title">{title}</h2>
             <span class="slurm-card_badge">{card_type}</span>
@@ -240,7 +241,7 @@ class HTMLGenerator:
             {resources}
         </p>
         {children_html}
-        </section>
+        </div>
         """
 
         # If this is the top-level card, package it with the shared responsive CSS stylesheet
@@ -270,8 +271,8 @@ class HTMLGenerator:
         mem_pool = props.get("wrk_mem_val")
         compute_unit_cores = props.get("exe_cpu_val")
         compute_unit_mem = props.get("exe_mem_val")
-        col_slurm_info = "#00aedb"
-        col_node_info = "#ffc425"
+        col_slurm_info = "#0292b6"
+        col_node_info = "#ad8619"
         col_master_info = "#d11141"
         col_pool_info = "#f37735"
         col_cu_info = "#00b159"
@@ -465,21 +466,40 @@ class WidgetFactory:
             disabled=disabled,
         )
 
+    # @staticmethod
+    # def create_checkbox(
+    #     value: bool,
+    #     description: str,
+    #     label_style: Optional[Dict[str, str]] = None,
+    #     layout: Optional[widgets.Layout] = None,
+    # ) -> widgets.Checkbox:
+    #     """Create a standardized Checkbox widget."""
+    #     cb:widgets.Checkbox = widgets.Checkbox(
+    #         value=value,
+    #         description=description,
+    #         indent=False,
+    #         style=label_style or DEFAULT_LABEL_STYLE,
+    #         layout=layout or DEFAULT_WIDGET_LAYOUT,
+    #     )
+    #     cb.add_class("checkbox")
+    #     return cb
+    
     @staticmethod
     def create_checkbox(
         value: bool,
         description: str,
         label_style: Optional[Dict[str, str]] = None,
         layout: Optional[widgets.Layout] = None,
-    ) -> widgets.Checkbox:
+    ) -> CustomCheckbox:
         """Create a standardized Checkbox widget."""
-        return widgets.Checkbox(
+        return CustomCheckbox(
             value=value,
             description=description,
             indent=False,
             style=label_style or DEFAULT_LABEL_STYLE,
             layout=layout or DEFAULT_WIDGET_LAYOUT,
         )
+        
 
 
 def fetch_image(url: str) -> bytes:
@@ -498,3 +518,96 @@ def create_placeholder_logo() -> widgets.HTML:
         value="<div style='width:100px;height:100px;background-color:#eee;"
               "display:flex;align-items:center;justify-content:center;color:#999;'>logo</div>"
     )
+
+# Adding disable/enable functionality to HBox and VBox
+class ContainerMixin:
+    """Mixin that adds enable/disable functionality to Box widgets."""
+
+    def disable(self):
+        """Disable the container by adding the CSS class."""
+        self.add_class("disable")
+
+    def enable(self):
+        """Enable the container by removing the CSS class."""
+        self.remove_class("disable")
+
+    def is_disabled(self) -> bool:
+        """Check whether the container is currently disabled."""
+        return "disable" in (self._dom_classes or [])
+
+    def toggle(self):
+        """Toggle between enabled and disabled states."""
+        if self.is_disabled():
+            self.enable()
+        else:
+            self.disable()
+
+
+class VBox(ContainerMixin, widgets.VBox):
+    """VBox extended with enable/disable support."""
+    pass
+
+
+class HBox(ContainerMixin, widgets.HBox):
+    """HBox extended with enable/disable support."""
+    pass
+
+class CustomCheckbox(widgets.HBox):
+    # Define 'value' as a traitlet so it can be observed/linked
+    value = Bool(False).tag(sync=True)
+
+    def __init__(self, description="Label", value=False, **kwargs):
+        # 1. Create the internal checkbox (without a native description)
+        self._checkbox: widgets.Checkbox = widgets.Checkbox(value=value, indent=False)
+        self._checkbox.add_class("custom-box-design")
+        
+        # 2. Create the label widget
+        self._label:widgets.Label = widgets.Label(value=f"{description}: ")
+        self._label.add_class("custom-box-label")
+
+        
+        # 3. Create the CSS widget to override the design
+        self._css = widgets.HTML("""
+            <style>
+                .custom-box-design input[type='checkbox'] {
+                    width: 20px;
+                    height: 20px;
+                    cursor: pointer;
+                    accent-color: #007bff;
+                    margin-left: 5px;
+                }
+                .custom-box-design { width: auto !important; }
+                .custom-box-label {
+                    width: 200px; 
+                    justify-content: right;
+                }
+            </style>
+        """)
+        
+        # 4. Set the children in the reversed order: [Box, Label]
+        super().__init__(children=[self._label,self._checkbox, self._css], **kwargs)
+        
+        # 5. Link the class 'value' to the internal checkbox 'value'
+        widgets.link((self._checkbox, 'value'), (self, 'value'))
+    
+    def update_label(self,label: str):
+        self._label.value = f"{label}: "
+
+    @property
+    def description(self):
+        return self._label.value.rstrip(": ")
+    
+    # @property
+    # def value(self):
+    #     return self._checkbox.value
+    
+    @description.setter
+    def description(self, value: str):
+        self._label.value = f"{value}: "
+
+    def is_checked(self):
+        return self._checkbox.value
+        
+
+# class Checkbox(CustomCheckbox,widgets.Checkbox):
+#     pass

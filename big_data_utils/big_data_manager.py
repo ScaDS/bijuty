@@ -483,7 +483,7 @@ class BigDataManager:
         """Get the cluster log file path."""
         return f"{self._get_log_dir()}/cluster_log"
 
-    def get_fw_cluster_processes(self, all_procs: bool = False) -> Tuple[str, ...]:
+    def get_fw_cluster_processes(self, all_procs: bool = False) -> Tuple[dict, ...]:
         """
         Get framework-specific process names.
 
@@ -527,6 +527,8 @@ class BigDataManager:
             return False
 
         master_proc, worker_proc = processes[0], processes[1]
+        master_proc_patt = master_proc.get("pattern")
+        worker_proc_patt = worker_proc.get("pattern")
         current_user = getpass.getuser()
         expected_workers = len(self.get_worker_hosts())
 
@@ -545,13 +547,13 @@ class BigDataManager:
                 cmdline_str = " ".join(cmdline)
 
                 # Log for debugging
-                if master_proc in cmdline_str or worker_proc in cmdline_str:
+                if master_proc_patt in cmdline_str or worker_proc_patt in cmdline_str:
                     logger.debug(f"Checking PID {proc.pid}: {cmdline_str}")
 
-                if master_proc in cmdline_str:
+                if master_proc_patt in cmdline_str:
                     found_master = True
 
-                if worker_proc in cmdline_str:
+                if worker_proc_patt in cmdline_str:
                     for worker in self.get_worker_hosts():
                         if worker in cmdline_str:
                             worker_count += 1

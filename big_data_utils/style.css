@@ -3,6 +3,7 @@
   border-radius: 10px;
   /* background-image: linear-gradient( 179.6deg,  rgba(0,19,26,1) -4.9%, rgba(0,77,105,1) 108.4% ) !important; */
   background: #0f2d56 !important;
+  gap:5px;
 }
 .sub-container {
   padding: 20px;
@@ -10,6 +11,22 @@
   border-radius: 10px;
   background: #bbdefb !important;
 }
+.sub-container:hover {
+   box-shadow: inset 0px 0px 19px 0px #0089fa;
+}
+
+.disable {
+  filter: grayscale(100%);
+  pointer-events: none;  
+  cursor: not-allowed;
+  user-select: none;
+  opacity: 0.6;
+}
+
+.checkbox{
+  flex-flow:column-reverse;
+}
+
 .log {
   white-space: pre-wrap !important;
   word-wrap: break-word !important;
@@ -17,6 +34,7 @@
   max-width: 100% !important;
   background: #bbdefb !important;
   display: flex;
+  padding: 20px;
 }
 
 /* .slurm-container {
@@ -50,6 +68,7 @@
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
+  height:100%
 }
 .slurm-card:hover {
   box-shadow: 0 4px 12px
@@ -110,4 +129,30 @@
 }
 .slurm-card .slurm-card .slurm-card_resources {
   font-size: 0.8rem;
+}
+
+.plot_row{
+  background: white;
+  width: 100%;
+  padding: 2px;
+  margin-bottom: 5px;
+  border: 1px solid black;
+}
+
+.plot_row_title{
+  width: 100%;
+  border: none;
+  padding-left: 5px;
+  font-size: large;
+  font-weight: bolder;
+}
+
+.plot_row_metric_selector{
+  width: 60%;
+}
+
+.plot_row_check_box{
+  margin: 0px 5px;
+  width: fit-content;
+  justify-content: center;
 }
