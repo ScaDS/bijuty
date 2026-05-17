@@ -22,10 +22,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from multiprocessing import Process
 from .utils import debug_write_to_file
+from .gui_components import WidgetFactory
+from .slurm_utils import SlurmManager
+
 # import plotly.io as pio
 # pio.renderers.default = "browser"
 
-#from .utils import #logger
+# from .utils import #logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -83,14 +86,46 @@ class ProcessMetricsHistory:
         timestamp: Measurement timestamps.
     """
 
-    cpu: deque[float] = field(default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
-    mem_pct: deque[float] = field(default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
-    mem_rss: deque[float] = field(default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
-    mem_vms: deque[float] = field(default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
-    threads: deque[int] = field(default_factory=lambda: deque([0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
-    io_read: deque[float] = field(default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
-    io_write: deque[float] = field(default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
-    timestamp: deque[float] = field(default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE))
+    cpu: deque[float] = field(
+        default_factory=lambda: deque(
+            [0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
+    mem_pct: deque[float] = field(
+        default_factory=lambda: deque(
+            [0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
+    mem_rss: deque[float] = field(
+        default_factory=lambda: deque(
+            [0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
+    mem_vms: deque[float] = field(
+        default_factory=lambda: deque(
+            [0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
+    threads: deque[int] = field(
+        default_factory=lambda: deque(
+            [0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
+    io_read: deque[float] = field(
+        default_factory=lambda: deque(
+            [0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
+    io_write: deque[float] = field(
+        default_factory=lambda: deque(
+            [0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
+    timestamp: deque[float] = field(
+        default_factory=lambda: deque(
+            [0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE
+        )
+    )
 
     def append(self, metrics: ProcessMetricsSnapshot) -> None:
         """Append a new metrics snapshot to the history.
@@ -135,7 +170,7 @@ class ProcessMetricCollector:
     ) -> None:
         self.process_names = list(process_names) if process_names is not None else []
         # print("In collector\n",self.process_names)
-        
+
         self.user = getpass.getuser()
         self._history_size = history_size
         self.history: dict[str, ProcessMetricsHistory] = {
@@ -151,13 +186,13 @@ class ProcessMetricCollector:
         Returns:
             The matching process name pattern, or None if no match.
         """
-        #print(f"[DEBUG] _match_process entered with pid={proc.pid}")
+        # print(f"[DEBUG] _match_process entered with pid={proc.pid}")
         # Quick check: skip kernel threads and invalid processes
         # if proc.pid <= 2:
         #     print(f"[DEBUG] Skipping pid {proc.pid} (<=2)")
         #     return None
         try:
-            #print(f"[DEBUG] Checking status of pid {proc.pid}")
+            # print(f"[DEBUG] Checking status of pid {proc.pid}")
             # Check status first - skip zombies and other problematic states
             try:
                 status = proc.status()
@@ -180,10 +215,10 @@ class ProcessMetricCollector:
                     ##logger.debug(f"Match found! name='{name}' in cmdline of PID {proc.pid}")
                     return proc_i
         except (psutil.AccessDenied, psutil.NoSuchProcess) as e:
-            #logger.debug("Could not access process %s info: %s", proc.pid, e)
+            # logger.debug("Could not access process %s info: %s", proc.pid, e)
             print("Could not access process %s info: %s", proc.pid, e)
         except Exception as e:
-            #logger.warning("Unexpected error accessing process %s: %s", proc.pid, e)
+            # logger.warning("Unexpected error accessing process %s: %s", proc.pid, e)
             print("Unexpected error accessing process %s: %s", proc.pid, e)
 
         return None
@@ -217,11 +252,13 @@ class ProcessMetricCollector:
                 timestamp=time.time(),
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess) as e:
-            #logger.debug("Failed to extract metrics from process %s: %s", proc.pid, e)
+            # logger.debug("Failed to extract metrics from process %s: %s", proc.pid, e)
             print("Failed to extract metrics from process %s: %s", proc.pid, e)
         except Exception as e:
-            #logger.warning("Unexpected error extracting metrics from process %s: %s", proc.pid, e)
-            print("Unexpected error extracting metrics from process %s: %s", proc.pid, e)
+            # logger.warning("Unexpected error extracting metrics from process %s: %s", proc.pid, e)
+            print(
+                "Unexpected error extracting metrics from process %s: %s", proc.pid, e
+            )
 
         return None
 
@@ -238,29 +275,33 @@ class ProcessMetricCollector:
         results: dict[str, dict[str, Any]] = {}
         ##logger.debug(f"collect() called, process_names={self.process_names}")
         if not self.process_names:
-            #logger.debug("No process_names configured, returning empty results")
+            # logger.debug("No process_names configured, returning empty results")
             return results
         try:
-            #proc_count = 0
+            # proc_count = 0
             match_count = 0
             ##logger.debug("Starting process_iter()")
-            for proc in psutil.process_iter(['pid', 'name']):
+            for proc in psutil.process_iter(["pid", "name"]):
                 proc_found = self._match_process(proc)
                 if proc_found is None:
                     continue
                 match_count += 1
                 metrics = self._extract_metrics(proc)
                 if metrics is None:
-                    #logger.debug(f"Failed to extract metrics for {name}")
+                    # logger.debug(f"Failed to extract metrics for {name}")
                     continue
-                proc_found_name = proc_found.get("title") 
+                proc_found_name = proc_found.get("title")
                 self.history[proc_found_name].append(metrics)
-                results[proc_found_name] = {"found": True, "history": self.history[proc_found_name], "proc_info":proc}
+                results[proc_found_name] = {
+                    "found": True,
+                    "history": self.history[proc_found_name],
+                    "proc_info": proc,
+                }
                 ##logger.debug(f"Collected metrics for {name}: cpu={metrics.cpu_percent:.1f}%")
             ##logger.debug(f"Total processed: {proc_count}, matched: {match_count}, results: {list(results.keys())}")
         except Exception as e:
-            #logger.error(f"Exception in collect(): {e}")
-            #logger.exception("Failed to collect process metrics")
+            # logger.error(f"Exception in collect(): {e}")
+            # logger.exception("Failed to collect process metrics")
             raise
         return results
 
@@ -293,6 +334,7 @@ class ProcessMonitor:
         self.refresh_interval = refresh_interval
         self.collector = ProcessMetricCollector(self.process_names)
         self.running = False
+        self._slurm_man = SlurmManager()
         self._process_plots: dict[str, dict[str, Any]] = {}
 
         # Initialize UI controls
@@ -322,20 +364,39 @@ class ProcessMonitor:
         )
         self._interval_slider.observe(self._on_interval_change, names="value")
 
-        self._controls = widgets.HBox([
-            self._btn_start,
-            self._btn_stop,
-            self._interval_slider,
-        ])
+        self._controls = widgets.HBox(
+            [
+                self._btn_start,
+                self._btn_stop,
+                self._interval_slider,
+            ]
+        )
 
-        self._plot_widget = widgets.VBox([],layout=widgets.Layout(
-            width='100%',
-            margin='5px 0px',
-            display='flex',
-            flex_flow='column',
-        ))
+        self._plot_widget = widgets.VBox(
+            [],
+            layout=widgets.Layout(
+                width="100%",
+                margin="5px 0px",
+                display="flex",
+                flex_flow="column",
+            ),
+        )
 
-        self._dashboard = widgets.VBox([self._controls,self._plot_widget])
+        self._dashboard = widgets.VBox(
+            [
+                widgets.HBox(
+                    [
+                        self._controls,
+                        WidgetFactory.create_styled_button_redirect(
+                            description="Pika web interface",
+                            url=f"https://pika.zih.tu-dresden.de/user/live/job/bash/{self._slurm_man.job_name}/{self._slurm_man.start_time}/{self._slurm_man.partition}",
+                        ),
+                    ],
+                    layout=widgets.Layout(justify_content="space-between"),
+                ),
+                self._plot_widget,
+            ]
+        )
 
     def show(self) -> None:
         """Display the monitoring dashboard in the Jupyter notebook."""
@@ -348,7 +409,7 @@ class ProcessMonitor:
             The dashboard VBox widget containing controls and plot.
         """
         return self._dashboard
-    
+
     def get_ui(self) -> widgets.VBox:
         """Get the dashboard widget for embedding in other UIs.
 
@@ -356,7 +417,6 @@ class ProcessMonitor:
             The dashboard VBox widget containing controls and plot.
         """
         return self._dashboard
-
 
     def set_process_names(self, process_names: Sequence[str]) -> None:
         """Update the process names to monitor.
@@ -367,14 +427,14 @@ class ProcessMonitor:
         self.process_names = list(process_names)
         # print("In monitor, setting process\n",self.process_names)
         self.collector = ProcessMetricCollector(self.process_names)
-        #self._plot_widget = {}  # Reset plot to use new processes
+        # self._plot_widget = {}  # Reset plot to use new processes
 
     def _start_collecting(self) -> None:
         """Start the metrics collection in a background thread."""
         if len(self.process_names) == 0:
-            #logger.debug("Process name list is empty")
+            # logger.debug("Process name list is empty")
             return
-        
+
         if self.running:
             return
         self.running = True
@@ -383,10 +443,9 @@ class ProcessMonitor:
         self._collect_process_stop_event = threading.Event()
         self._collect_process = threading.Thread(target=self._collect_loop, daemon=True)
         # self._collect_process = Process(target=self._collect_loop,daemon=True)
-        
+
         self._collect_process.start()
-        #collect_thread.start()
-        
+        # collect_thread.start()
 
     def _stop_collecting(self) -> None:
         """Stop the metrics collection."""
@@ -395,7 +454,7 @@ class ProcessMonitor:
         self._btn_stop.disabled = True
         self._collect_process_stop_event.set()
         self._collect_process.join()
-        
+
     def _collect_loop(self) -> None:
         """Main collection loop running in background thread."""
         while self.running:
@@ -403,8 +462,7 @@ class ProcessMonitor:
             self._render_metrics(metrics)
             time.sleep(self.refresh_interval)
 
-
-    def _on_start(self,b) -> None:
+    def _on_start(self, b) -> None:
         """Handle start button click.
 
         Args:
@@ -412,7 +470,7 @@ class ProcessMonitor:
         """
         self._start_collecting()
 
-    def _on_stop(self,b) -> None:
+    def _on_stop(self, b) -> None:
         """Handle stop button click.
 
         Args:
@@ -428,8 +486,9 @@ class ProcessMonitor:
         """
         self.refresh_interval = change["new"]
 
-        
-    def _get_metric_deque_value(self, history: ProcessMetricsHistory, metric: str) -> list[float | int]:
+    def _get_metric_deque_value(
+        self, history: ProcessMetricsHistory, metric: str
+    ) -> list[float | int]:
         """Get the current values for a specific metric from history.
 
         Args:
@@ -477,24 +536,22 @@ class ProcessMonitor:
         Args:
             metrics: Dictionary of process metrics from collector.
         """
-        
 
         if not metrics:
             return
 
         # Get list of metric keys (excluding timestamp)
         history_keys = [
-            k for k in vars(next(iter(metrics.values()))["history"])
-            if k != "timestamp"
+            k for k in vars(next(iter(metrics.values()))["history"]) if k != "timestamp"
         ]
-        
+
         with self._dashboard.hold_trait_notifications():
             for proc_name, data in metrics.items():
                 if proc_name not in self._process_plots:
                     self._create_plot(proc_name, history_keys)
-                
+
                 proc_info = self._process_plots[proc_name]
-                proc_info['latest_data'] = data
+                proc_info["latest_data"] = data
                 self._update_plot(proc_name, data, history_keys)
 
     def _calculate_stats(self, values: list[float | int]) -> tuple[float, float, float]:
@@ -525,7 +582,13 @@ class ProcessMonitor:
         for metric_idx in range(num_metrics):
             # Each metric has 4 traces: data, mean, max, min
             # Stat traces are at positions 1, 2, 3 within each metric group
-            indices.extend([base + metric_idx * 4 + 1, base + metric_idx * 4 + 2, base + metric_idx * 4 + 3])
+            indices.extend(
+                [
+                    base + metric_idx * 4 + 1,
+                    base + metric_idx * 4 + 2,
+                    base + metric_idx * 4 + 3,
+                ]
+            )
         return indices
 
     def _build_process_figure(
@@ -554,7 +617,7 @@ class ProcessMonitor:
         proc_plot: go.FigureWidget = go.FigureWidget(fig)
 
         proc_plot.layout.height = PLOT_HEIGHT_PER_PROCESS
-        #proc_plot.layout.width = PLOT_WIDTH
+        # proc_plot.layout.width = PLOT_WIDTH
         proc_plot.layout.margin = dict(l=50, r=20, t=50, b=50)
         proc_plot.layout.showlegend = False
         proc_plot.update_layout(autosize=True)
@@ -578,7 +641,7 @@ class ProcessMonitor:
                 name=f"mean_{metric}",
                 visible=True,
                 legendgroup="mean",
-                line=dict(dash='dash', width=1, color='rgba(255, 0, 0, 0.5)'),
+                line=dict(dash="dash", width=1, color="rgba(255, 0, 0, 0.5)"),
             )
 
             # Max Trace (dotted, green, semi-transparent)
@@ -587,7 +650,7 @@ class ProcessMonitor:
                 name=f"max_{metric}",
                 visible=True,
                 legendgroup="max",
-                line=dict(dash='dot', width=1, color='rgba(0, 128, 0, 0.4)'),
+                line=dict(dash="dot", width=1, color="rgba(0, 128, 0, 0.4)"),
             )
 
             # Min Trace (dotted, blue, semi-transparent)
@@ -596,36 +659,45 @@ class ProcessMonitor:
                 name=f"min_{metric}",
                 visible=True,
                 legendgroup="min",
-                line=dict(dash='dot', width=1, color='rgba(0, 0, 255, 0.4)'),
+                line=dict(dash="dot", width=1, color="rgba(0, 0, 255, 0.4)"),
             )
 
         # Add toggle button for stats
-        stat_indices = [i for i, t in enumerate(proc_plot.data) if "data_" not in t.name]
+        stat_indices = [
+            i for i, t in enumerate(proc_plot.data) if "data_" not in t.name
+        ]
         proc_plot.update_layout(
-            updatemenus=[dict(
-                type="buttons",
-                xanchor="left",
-                yanchor="top",
-                x=0,
-                y=1.5,
-                direction="right",
-                font=dict(size=10, color="black"),
-                # pad={"r": 1, "l": 1, "t": 1, "b":1},
-                buttons=[
-                    dict(
-                        label="Stats Off",
-                        method="restyle",
-                        args=[{"visible": [False], "showlegend": [False]}, stat_indices],
-                    ),
-                    dict(
-                        label="Stats On",
-                        method="restyle",
-                        args=[{"visible": [True], "showlegend": [True]}, stat_indices],
-                    ),
-                ],
-            )]
+            updatemenus=[
+                dict(
+                    type="buttons",
+                    xanchor="left",
+                    yanchor="top",
+                    x=0,
+                    y=1.5,
+                    direction="right",
+                    font=dict(size=10, color="black"),
+                    # pad={"r": 1, "l": 1, "t": 1, "b":1},
+                    buttons=[
+                        dict(
+                            label="Stats Off",
+                            method="restyle",
+                            args=[
+                                {"visible": [False], "showlegend": [False]},
+                                stat_indices,
+                            ],
+                        ),
+                        dict(
+                            label="Stats On",
+                            method="restyle",
+                            args=[
+                                {"visible": [True], "showlegend": [True]},
+                                stat_indices,
+                            ],
+                        ),
+                    ],
+                )
+            ]
         )
-
 
         # Style axes
         proc_plot.update_xaxes(title_text="Time", tickfont_size=9)
@@ -645,7 +717,7 @@ class ProcessMonitor:
             history_keys: List of metric keys to display.
         """
 
-        #title_wdg: widgets.Text = widgets.Text(proc_name)
+        # title_wdg: widgets.Text = widgets.Text(proc_name)
         title_wdg: widgets.HTML = widgets.HTML(
             f"""<div class="plot_row_title">{proc_name}</div>"""
         )
@@ -656,7 +728,7 @@ class ProcessMonitor:
             wdg_checkbox = widgets.Checkbox(
                 value=True,
                 description=self._get_metric_display_name(metric),
-                indent=False
+                indent=False,
             )
             wdg_checkbox.add_class("plot_row_check_box")
             checkboxes[metric] = wdg_checkbox
@@ -670,32 +742,36 @@ class ProcessMonitor:
             proc_plot = self._build_process_figure(proc_name, active_metrics)
 
             plot_info = self._process_plots[proc_name]
-            plot_info['figure'] = proc_plot
-            plot_info['active_metrics'] = active_metrics
-            plot_info['container'].children = [title_wdg,wdg_metric_selector, proc_plot]
+            plot_info["figure"] = proc_plot
+            plot_info["active_metrics"] = active_metrics
+            plot_info["container"].children = [
+                title_wdg,
+                wdg_metric_selector,
+                proc_plot,
+            ]
 
             # Populate with latest data if available
-            if plot_info.get('latest_data'):
-                self._update_plot(proc_name, plot_info['latest_data'], history_keys)
+            if plot_info.get("latest_data"):
+                self._update_plot(proc_name, plot_info["latest_data"], history_keys)
 
         for cb in checkboxes.values():
-            cb.observe(lambda change: _rebuild(), names='value')
+            cb.observe(lambda change: _rebuild(), names="value")
 
         active_metrics = list(history_keys)
         proc_plot = self._build_process_figure(proc_name, active_metrics)
-        
+
         container: widgets.VBox = widgets.VBox(
             [title_wdg, wdg_metric_selector, proc_plot],
             # layout=widgets.Layout(width="100%", border="1px solid #eee", margin="5px", background_color="white"),
         )
-        container.add_class("plot_row") # Check style.css
+        container.add_class("plot_row")  # Check style.css
 
         self._process_plots[proc_name] = {
-            'container': container,
-            'figure': proc_plot,
-            'checkboxes': checkboxes,
-            'history_keys': history_keys,
-            'active_metrics': active_metrics,
+            "container": container,
+            "figure": proc_plot,
+            "checkboxes": checkboxes,
+            "history_keys": history_keys,
+            "active_metrics": active_metrics,
         }
         self._plot_widget.children += (container,)
 
@@ -717,7 +793,7 @@ class ProcessMonitor:
 
         # Look up current plot and its active metrics
         proc_info = self._process_plots[proc_name]
-        proc_fig = proc_info['figure']
+        proc_fig = proc_info["figure"]
 
         # Build a name -> trace index map for this figure
         trace_name_to_idx = {t.name: i for i, t in enumerate(proc_fig.data)}
@@ -726,7 +802,7 @@ class ProcessMonitor:
         history = proc_metric_data["history"]
 
         with proc_fig.batch_update():
-            for metric in proc_info.get('active_metrics', history_keys):
+            for metric in proc_info.get("active_metrics", history_keys):
                 values = self._get_metric_deque_value(history, metric)
                 if not values:
                     continue

@@ -290,7 +290,7 @@ class GUIUtils:
             
         return VBox(
             [
-                self._create_header("Framework GUI"),
+                self._create_header("Framework Web Interface"),
                 widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
                 instructions_widget
                 
@@ -771,6 +771,7 @@ class GUIUtils:
         ])
         self.row4.add_class("sub-container")
         self.row4.disable()
+
         
         # Inject CSS for text wrapping in output area
         html_header_content = f"""
