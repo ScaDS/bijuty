@@ -12,6 +12,7 @@ import re
 import shlex
 import socket
 import sys
+import threading
 import time
 import traceback
 from typing import Any, Dict, List, Optional
@@ -106,6 +107,7 @@ class GUIUtils:
         self._create_widgets()
         self._attach_widget_observers()
         self._setup_visualization_triggers()
+        self._update_cluster_info()
         self.main_container = self._assemble_gui()
         if display_gui:
             display(self.main_container)
@@ -182,7 +184,8 @@ class GUIUtils:
     def _reinitalize_dashboard(self) ->None:
         self.process_monitor.set_process_names(self.bdm.get_fw_cluster_processes(all_procs=True))
         self.spark_monitor.set_monitor(user_input=self.bdm._user_inputs)
-        #self.widgets["metric_dashboard"] = self._create_metric_dashboard()
+        # self.spark_monitor=SparkMetricMonitor(user_input=self.bdm._user_inputs)
+        # self.widgets["metric_dashboard"] = self._create_metric_dashboard()
 
     # =========================================================================
     # Properties
@@ -230,8 +233,9 @@ class GUIUtils:
 
         self.widgets["metric_dashboard"] = self._create_metric_dashboard()
         self.widgets["framework_gui"] = self._create_framework_web_gui()
+        self.widgets["cluster_info"] = self._create_cluster_info_widget()
 
-    def _create_framework_web_gui(self) -> widgets.HBox:
+    def _create_framework_web_gui(self) -> HBox:
         """Create a panel with simple buttons to open framework web UIs.
 
         When running remotely, displays SSH port-forwarding instructions so the
@@ -276,10 +280,9 @@ class GUIUtils:
             ssh_cmd = f"ssh {self.slurm_info.user}@{self.slurm_info.login_node} {ssh_parts} <jump-host>"
 
             instructions_html = f"""
-            <div style="padding:10px; margin-top:10px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-family:monospace; font-size:12px;">
-              <b>Remote environment detected</b><br/>
-              If above links do not open in your local browser, set up SSH port forwarding:
-              <pre style="background:#f7f7f7; padding:8px; border-radius:3px; margin:6px 0;">{ssh_cmd}</pre>
+            <div style="padding:5px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-size:12px;width:70%;justify-content:center;margin: auto auto">
+              <b>Remote environment detected: </b> If above links do not open in your local browser, set up SSH port forwarding.
+              <pre style="background:#f7f7f7; padding:5px; margin:0px 0; font-family:monospace;font-size:12px;">{ssh_cmd}</pre>
             </div>
             """
             instructions_widget = widgets.HTML(value=instructions_html)
@@ -287,11 +290,41 @@ class GUIUtils:
             
         return VBox(
             [
-                self._create_header("Framework Web Interface"),
+                # self._create_header("Framework Web Interface"),
                 widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
                 instructions_widget
                 
-            ],layout=widgets.Layout(width="100%", padding="8px")
+            ],layout=widgets.Layout(width="50%", padding="8px")
+        )
+
+    def _create_cluster_info_widget(self) -> widgets.HTML:
+        """Create an empty widget displaying current master and worker nodes."""
+        return widgets.HTML()
+
+    def _update_cluster_info(self, change: Optional[Any] = None) -> None:
+        """Update the cluster info widget with current master, worker nodes and status."""
+        info_widget = self.widgets.get("cluster_info")
+        if info_widget is None:
+            return
+        master = self.get_selected_master_host() or "-"
+        master_port = self.get_selected_master_port() or "-"
+        workers = self.get_selected_workers()
+        workers_str = ", ".join(workers) if workers else "-"
+        running = self.bdm.is_cluster_up()
+        status_color = "#28a745" if running else "#dc3545"
+        status_text = "Running" if running else "Stopped"
+        info_widget.value = (
+            f"<div style='font-size:12px; color:#555; margin-top:4px;display:flex; flex-direction:column;width:100%; justify-content:center; align-items:center;'>"
+            # f"<div style='width:80%; justify-content:left; align-items:center;'>"
+            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center'><b>Cluster Status:&nbsp;</b><span style='width:8px;height:8px;border-radius:50%;background:{status_color};margin-right:4px;'></span> {status_text}</div>"
+            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center'><b>Master:&nbsp;</b> {master}&nbsp;|&nbsp; <b>Port:&nbsp;</b>{master_port}</div>"
+            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center'> <b>Workers:&nbsp;</b> {workers_str}</div>"
+            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center;font-size:11px; color:#777; margin-top:2px;'>"
+            f"Use the master node name while initializing Spark context.<br>"
+            f"eg. spark://{master}:{master_port}"
+            f"</div>"
+            # f"</div>"
+            f"</div>"
         )
 
     def _create_header(self, title: str) -> widgets.HTML:
@@ -525,11 +558,13 @@ class GUIUtils:
         return button
     
     def _create_metric_dashboard(self) -> widgets.Box:
-        """Create the metric dashboard widget.
-        """        
+        """Create the metric dashboard widget."""        
         return widgets.VBox(
             [
+
+                widgets.HTML("<div>Process Metrics</div>"),
                 self.process_monitor.get_ui(),
+                widgets.HTML("<div>Framework Metrics</div>"),
                 self.spark_monitor.get_ui()
             ]
         )
@@ -574,6 +609,11 @@ class GUIUtils:
 
         for widget in observable_widgets:
             widget.observe(self._on_parameters_changed, names="value")
+
+        # Observers to refresh cluster info label
+        self.widgets["master_host"].observe(self._update_cluster_info, names="value")
+        for cb in self.widgets["worker_hosts"].children[1].children:
+            cb.observe(self._update_cluster_info, names="value")
 
         # Set up dynamic range updates
         self._setup_dynamic_ranges()
@@ -648,14 +688,15 @@ class GUIUtils:
             with self.widgets["output_area"]:
                 self._set_environment()
                 self._last_cluster_result = self.bdm.start_cluster()
-            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
-            self._toggle_framework_gui_btns(disabled=False)
+            self._toggle_framework_gui(disabled=False)
             self.row3.enable()
-            self.row4.enable()
+            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+            self._toggle_framework_gui(disabled=False)
         except Exception as e:
             tb = traceback.format_exc()
             self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+        self._update_cluster_info()
         
     def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle stop cluster button click."""
@@ -665,12 +706,12 @@ class GUIUtils:
             with self.widgets["output_area"]:
                 self._last_cluster_result = self.bdm.stop_cluster()
                 self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
-                self._toggle_framework_gui_btns(disabled=True)
+                self._toggle_framework_gui(disabled=True)
                 self.row3.disable()
-                self.row4.disable()
         except Exception as e:
             self._log(f"Failed to stop cluster:{e}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+        self._update_cluster_info()
 
     def _toggle_cluster_buttons(
         self,
@@ -689,11 +730,15 @@ class GUIUtils:
         if stop_disabled is not None:
             self.widgets["stop_cluster"].disabled = stop_disabled
 
-    def _toggle_framework_gui_btns(self,disabled: bool) -> None:
-        """Toggle cluster button states."""
-        fw_gui_btns = self.widgets["framework_gui"].children[1]
+    def _toggle_framework_gui(self,disabled: bool) -> None:
+        # """Toggle cluster button states."""
+        fw_gui_btns = self.widgets["framework_gui"].children[0]
         for wdg_i in fw_gui_btns.children:
             wdg_i = WidgetFactory.update_widget_state(wdg_i,disable=disabled)
+        if disabled:
+            self.widgets["framework_gui"].disable()
+        else:
+            self.widgets["framework_gui"].enable()
     
     def _update_framework_home_labels(self, change: Dict[str, Any]) -> None:
         """Update framework home widget labels when framework changes."""
@@ -736,15 +781,32 @@ class GUIUtils:
             ),
         )
 
-        self.row2 = VBox(
-            [
-                self._create_header(title="Cluster Control"),
+        buttons_box = HBox([
                 self.widgets["start_cluster"],
                 self.widgets["stop_cluster"]
-            ],
+            ], layout=widgets.Layout(
+                width="80%",
+                justify_content="center",
+                margin="0px auto"
+            ))
+
+        cluster_info_box = VBox(
+            [buttons_box, self.widgets["cluster_info"]],
+            layout=widgets.Layout(width="50%")
+        )
+
+        cluster_widget = HBox([
+            cluster_info_box,
+            widgets.HTML(value="<div style='border-left: 1px solid #808080; height: 90%; display: inline-block; margin: auto auto;'></div>"),
+            self.widgets["framework_gui"],
+            ]
+        )
+        self._toggle_framework_gui(disabled=True)
+
+        self.row2 = VBox([self._create_header(title="Cluster Management"), cluster_widget],
             layout=widgets.Layout(
                 display="flex",
-                flex_flow="row",
+                flex_flow="column",
                 #margin="0px",
                 justify_content="space-around",
             ),
@@ -753,18 +815,18 @@ class GUIUtils:
         
 
 
-        self.row3:VBox= VBox([
-            self.widgets["framework_gui"],
-        ])
-        self.row3.add_class("sub-container")
-        self.row3.disable()
+        # self.row3:VBox= VBox([
+        #     self.widgets["framework_gui"],
+        # ])
+        # self.row3.add_class("sub-container")
+        
 
-        self.row4:VBox = VBox([
+        self.row3:VBox = VBox([
             self._create_header(title="Performance Metric"),
             self.widgets["metric_dashboard"]
         ])
-        self.row4.add_class("sub-container")
-        self.row4.disable()
+        self.row3.add_class("sub-container")
+        self.row3.disable()
 
         # Inject CSS for text wrapping in output area
         html_header_content = f"""
@@ -780,7 +842,9 @@ class GUIUtils:
         self.style_widget = widgets.HTML(value=html_header_content)
 
         main_container : VBox = VBox(
-            [self.style_widget, self.row1, self.row2, self.row3, self.row4, self.widgets["output_area"]],
+            [self.style_widget, self.row1, self.row2, 
+            #  self.row3, 
+             self.row3, self.widgets["output_area"]],
             layout=widgets.Layout(
                 display="flex",
                 flex_flow="column",

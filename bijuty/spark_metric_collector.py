@@ -305,24 +305,27 @@ class SparkMetricMonitor(MetricDashboard):
         if base_url:
             self._base_url = base_url
         else:
-            self._base_url = None
+            if user_input:
+                self._base_url = f"http://{user_input.master}:4040"
+            else:
+                self._base_url = None
         
         self.enabled_metrics = enabled_metrics or ENABLED_METRICS
         
         self.collector = SparkMetricCollector(base_url=self._base_url)
-        self._extra = [
-            WidgetFactory.create_styled_button_redirect(
-                description="Spark App UI",
-                url=self.collector._base_url,
-            )
-        ]
+        # self._extra = [
+        #     WidgetFactory.create_styled_button_redirect(
+        #         description="Spark App UI",
+        #         url=self.collector._base_url,
+        #     )
+        # ]
         super().__init__(
             collector=self.collector,
             refresh_interval=refresh_interval,
             min_refresh=MIN_REFRESH_INTERVAL,
             max_refresh=MAX_REFRESH_INTERVAL,
             refresh_step=0.5,
-            extra_header_widgets=self._extra,
+            # extra_header_widgets=self._extra,
         )
     
     def set_monitor(self, user_input: Dict = None, base_url=None):
@@ -335,7 +338,8 @@ class SparkMetricMonitor(MetricDashboard):
                 raise Exception("Please provide base url")
         
         self.collector = SparkMetricCollector(base_url=self._base_url)
-    
+
+        
     def _render_metrics(self, metrics: Dict[str, Dict[str, Any]]) -> None:
         if not metrics:
             return

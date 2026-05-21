@@ -64,7 +64,7 @@ class SimpleLogger:
         LogLevel.DEBUG: "\033[90m",     # Gray
         LogLevel.ERROR: "\033[91m",     # Red
         LogLevel.WARNING: "\033[93m",   # Yellow
-        "reset": "\033[0m",
+        "reset": "\033[37m",
     }
 
     def __init__(self, use_colors: bool = True, level: LogLevel = LogLevel.INFO):
@@ -87,7 +87,7 @@ class SimpleLogger:
         if self.use_colors:
             color = self.COLORS.get(asked_level, "")
             reset = self.COLORS["reset"]
-            print(f"[{color}{level_label}{reset}] [{timestamp}] - {message}")
+            print(f"{reset}[{color}{level_label}{reset}] [{timestamp}] - {message}")
         else:
             print(f"[{level_label}] [{timestamp}] - {message}")
 

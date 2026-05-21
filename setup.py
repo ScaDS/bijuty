@@ -10,6 +10,7 @@ setup(
         "psutil>=5.9.0",
         "requests>=2.28.0",
         "plotly>=5.0.0",
+        "anywidget>=0.11.0"
     ],
     author="Apurv Deepak Kulkarni",
     author_email="apurv.kulkarni@tu-dresden.de",

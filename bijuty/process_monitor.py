@@ -303,16 +303,16 @@ class ProcessMonitor(MetricDashboard):
             self._slurm_man = SlurmManager(allow_outside_job=True)
 
         collector = ProcessMetricCollector(self.process_names)
-        extra = [
-            WidgetFactory.create_styled_button_redirect(
-                description="Pika web interface",
-                url=(
-                    f"https://pika.zih.tu-dresden.de/user/live/job/bash/"
-                    f"{self._slurm_man.job_name}/{self._slurm_man.start_time}/"
-                    f"{self._slurm_man.partition}"
-                ),
-            )
-        ]
+        # extra = [
+        #     WidgetFactory.create_styled_button_redirect(
+        #         description="Pika web interface",
+        #         url=(
+        #             f"https://pika.zih.tu-dresden.de/user/live/job/bash/"
+        #             f"{self._slurm_man.job_name}/{self._slurm_man.start_time}/"
+        #             f"{self._slurm_man.partition}"
+        #         ),
+        #     )
+        # ]
 
         super().__init__(
             collector=collector,
@@ -320,7 +320,7 @@ class ProcessMonitor(MetricDashboard):
             min_refresh=MIN_REFRESH_INTERVAL,
             max_refresh=MAX_REFRESH_INTERVAL,
             refresh_step=0.5,
-            extra_header_widgets=extra,
+            # extra_header_widgets=extra,
         )
 
     def set_process_names(self, process_names: Sequence[dict]) -> None:
