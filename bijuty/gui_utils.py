@@ -1171,6 +1171,7 @@ class GUIUtils:
             "SPARK_PID_DIR": self.get_selected_pid_dir(),
             "SPARK_MASTER_PORT": self.get_selected_master_port(),
             #"PYSPARK_PYTHON": os.environ.get("PYSPARK_PYTHON", sys.executable),
+            "LD_LIBRARY_PATH":os.environ.get("LD_LIBRARY_PATH",""), # important for slurm modules
         }
 
     def _update_env_file(self, env_updates: Dict[str, str]) -> None:
