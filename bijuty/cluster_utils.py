@@ -10,12 +10,14 @@ logger = SimpleLogger()
 
 class ClusterService:
     def __init__(self, fw_name):
+        
         # self.fw_name = fw_name.upper()
         # self.fw_conf_dir = None
                        
         # if self.fw_name in [ 'SPARK', 'FLINK']:
         # self.cluster_log = f"{self.fw_conf_dir}/log/cluster.log"
         # self.log_dir = f"{self.fw_conf_dir}/log"
+        pass
     
     def start_cluster(self):    
         logger.info(f"Starting {get_} cluster.")

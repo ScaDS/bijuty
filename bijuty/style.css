@@ -1,0 +1,143 @@
+.main-container {
+  padding: 10px;
+  border-radius: 10px;
+  /* background-image: linear-gradient( 179.6deg,  rgba(0,19,26,1) -4.9%, rgba(0,77,105,1) 108.4% ) !important; */
+  background: #0f2d56 !important;
+  gap:5px;
+}
+.sub-container {
+  padding: 20px;
+  margin: 5px;
+  border-radius: 10px;
+  background: #bbdefb !important;
+}
+.sub-container:hover {
+   box-shadow: inset 0px 0px 19px 0px #0089fa;
+}
+
+.disable {
+  filter: grayscale(100%);
+  pointer-events: none;  
+  cursor: not-allowed;
+  user-select: none;
+  opacity: 0.6;
+}
+
+.checkbox{
+  flex-flow:column-reverse;
+}
+
+.log {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  max-width: 100% !important;
+  /* background: #bbdefb !important; */
+  background: #000000 !important;
+  display: flex;
+  padding: 20px;
+  color: #ffffff !important;
+}
+
+.slurm-card {
+  --slurm-bg: color-mix(in srgb, var(--slurm-primary) 8%, #ffffff);
+  --slurm-accent: color-mix(in srgb, var(--slurm-primary) 18%, #ffffff);
+
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px;
+  border: 2px solid var(--slurm-primary);
+  border-radius: 10px;
+  background: var(--slurm-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+  height:100%
+}
+.slurm-card:hover {
+  box-shadow: 0 4px 12px
+    color-mix(in srgb, var(--slurm-primary) 100%, transparent);
+}
+
+.slurm-card_header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.slurm-card_title {
+  margin: 0;
+  color: var(--slurm-primary);
+  font-size: 1.15rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slurm-card_badge {
+  color: var(--slurm-primary);
+  background-color: var(--slurm-accent);
+  border: 1px dashed var(--slurm-primary);
+  border-radius: 10px;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.slurm-card_resources {
+  color: var(--slurm-primary);
+  font-size: 0.875rem;
+  margin: 0;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.slurm-card_children {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 15px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.slurm-card .slurm-card .slurm-card_title {
+  font-size: 1rem;
+}
+.slurm-card .slurm-card .slurm-card_resources {
+  font-size: 0.8rem;
+}
+
+.plot_row{
+  background: white;
+  width: 100%;
+  padding: 2px;
+  margin-bottom: 5px;
+  border: 1px solid black;
+}
+
+.plot_row_title{
+  width: 100%;
+  border: none;
+  padding-left: 5px;
+  font-size: large;
+  font-weight: bolder;
+}
+
+.plot_row_metric_selector{
+  width: 60%;
+}
+
+.plot_row_check_box{
+  margin: 0px 5px;
+  width: fit-content;
+  justify-content: center;
+}
