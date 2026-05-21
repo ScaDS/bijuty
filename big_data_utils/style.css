@@ -37,22 +37,7 @@
   padding: 20px;
 }
 
-/* .slurm-container {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 1400px;
-  height: 800px;
-  margin: 0 auto;
-  overflow-y: auto;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
-} */
-
 .slurm-card {
-  /* Dynamic accent mapping using modern CSS color-mix */
   --slurm-bg: color-mix(in srgb, var(--slurm-primary) 8%, #ffffff);
   --slurm-accent: color-mix(in srgb, var(--slurm-primary) 18%, #ffffff);
 
@@ -114,7 +99,6 @@
   opacity: 0.85;
 }
 
-/* Grid layout for nested children */
 .slurm-card_children {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -123,7 +107,6 @@
   width: 100%;
 }
 
-/* Scale down nested elements slightly to reflect structural hierarchy */
 .slurm-card .slurm-card .slurm-card_title {
   font-size: 1rem;
 }

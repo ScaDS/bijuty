@@ -33,6 +33,7 @@ from .gui_components import (
 )
 from .slurm_utils import SlurmManager
 from .process_monitor import ProcessMonitor
+from .spark_metric_collector import SparkMetricMonitor
 from .utils import run_bash_command, logger, get_file_content
 
 
@@ -67,7 +68,8 @@ class GUIUtils:
         # Initialize managers
         self.slurm_info = SlurmManager()
         self.bdm = BigDataManager()
-        self.process_monitor = ProcessMonitor()
+        self.process_monitor = ProcessMonitor(slurm_info=self.slurm_info)
+        self.spark_monitor = SparkMetricMonitor()
 
         # Widget containers
         self.widgets: Dict[str, Any] = {}
@@ -170,20 +172,17 @@ class GUIUtils:
         try:
             self._execute_framework_setup()
             self._update_spark_environment()
-            
             self._initialize_big_data_manager()
-            
-            # Set process monitor metrics
-            self.process_monitor.set_process_names(self.bdm.get_fw_cluster_processes(all_procs=True))
-            self.widgets["metric_dashboard"] = self.process_monitor.get_ui()
-            
+            self._reinitalize_dashboard()
         except Exception as e:
             self._handle_setup_error(e)
         # finally:
         #     self.widgets["load_button"].disabled = False
             
-
-        
+    def _reinitalize_dashboard(self) ->None:
+        self.process_monitor.set_process_names(self.bdm.get_fw_cluster_processes(all_procs=True))
+        self.spark_monitor.set_monitor(user_input=self.bdm._user_inputs)
+        #self.widgets["metric_dashboard"] = self._create_metric_dashboard()
 
     # =========================================================================
     # Properties
@@ -231,9 +230,7 @@ class GUIUtils:
 
         self.widgets["metric_dashboard"] = self._create_metric_dashboard()
         self.widgets["framework_gui"] = self._create_framework_web_gui()
-        
-        
-        
+
     def _create_framework_web_gui(self) -> widgets.HBox:
         """Create a panel with simple buttons to open framework web UIs.
 
@@ -529,16 +526,13 @@ class GUIUtils:
     
     def _create_metric_dashboard(self) -> widgets.Box:
         """Create the metric dashboard widget.
-
-        Updates the process monitor with current cluster processes
-        and returns its UI widget.
-
-        Returns:
-            The metric dashboard widget.
-        """
-        # processes = self.bdm.get_fw_cluster_processes(all_procs=True)
-        # self.process_monitor.set_process_names(processes)
-        return self.process_monitor.get_ui()
+        """        
+        return widgets.VBox(
+            [
+                self.process_monitor.get_ui(),
+                self.spark_monitor.get_ui()
+            ]
+        )
 
     def _create_output_area(self) -> widgets.Output:
         output_widget = widgets.Output(
@@ -772,7 +766,6 @@ class GUIUtils:
         self.row4.add_class("sub-container")
         self.row4.disable()
 
-        
         # Inject CSS for text wrapping in output area
         html_header_content = f"""
         <style>
@@ -971,7 +964,6 @@ class GUIUtils:
         os.environ[f"{self.get_selected_framework_home()}_HOME"] = self.get_selected_framework_home()
     
     def _create_conf_dest_dir(self) -> None:
-        print(os.path.dirname(self.get_selected_config_destination()))
         os.makedirs(os.path.dirname(self.get_selected_config_destination()),exist_ok=True)
 
     # =========================================================================
@@ -1071,7 +1063,7 @@ class GUIUtils:
         self._log(f"Time elapsed for config init: {elapsed:.2f} seconds","debug")
 
         if res.returncode != 0:
-            self._set_load_button_failed()
+            # self._set_load_button_failed()
             self._log(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}","error")
             raise RuntimeError(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}")
 

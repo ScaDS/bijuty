@@ -235,3 +235,4 @@ def get_file_content(file_path):
 def debug_write_to_file(content="here", file_path="./tmp.txt"):
     with open(file_path, "a") as f:
         f.write(content)
+        f.write("\n")

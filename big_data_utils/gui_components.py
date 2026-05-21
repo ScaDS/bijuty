@@ -59,10 +59,9 @@ DEFAULT_WIDGET_LAYOUT = widgets.Layout(
 @dataclass(frozen=True)
 class FrameworkConfig:
     """Configuration for a big data framework."""
-
     name: str
-    start_cmd: str
-    stop_cmd: str
+    # start_cmd: str
+    # stop_cmd: str
     proc_master: str
     proc_worker: str
     logo_url: str
@@ -118,14 +117,24 @@ class ResourceAllocation:
 FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
     "SPARK": FrameworkConfig(
         name="SPARK",
-        start_cmd="sbin/start-all.sh", # relative to framework home dir
-        stop_cmd="sbin/stop-all.sh",   # relative to framework home dir
+        # start_cmd={
+        #     "master","sbin/start-master.sh",
+        #     "worker","sbin/start-worker.sh"
+        # }, # relative to framework home dir
+        # stop_cmd={
+        #     "master","sbin/stop-master.sh",
+        #     "worker","sbin/stop-worker.sh"
+        # }, # relative to framework home dir
         proc_master={"title":"Master","pattern":"org.apache.spark.deploy.master.Master --host"},
         proc_worker={"title":"Worker","pattern":"org.apache.spark.deploy.worker.Worker --webui-port"},
+        # proc_master={"title":"Master","pattern":"xyz123"},
+        # proc_worker={"title":"Worker","pattern":"xyz123"},
         proc_other=[
             {"title":"SparkSubmit","pattern":"org.apache.spark.deploy.SparkSubmit"},
+            # {"title":"SparkSubmit","pattern":"xyz123"},
             {"title":"Executor","pattern":"org.apache.spark.executor.CoarseGrainedExecutorBackend"},
             {"title":"Scheduler","pattern":"org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend"},
+            # {"title":"Scheduler","pattern":"xyz123"},
         ],
         logo_url="https://spark.apache.org/images/spark-logo-back.png",
         worker_file="workers",
@@ -146,8 +155,8 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
     ),
     "FLINK": FrameworkConfig(
         name="FLINK",
-        start_cmd="bin/start-cluster.sh",
-        stop_cmd="bin/stop-cluster.sh",
+        # start_cmd="bin/start-cluster.sh",
+        # stop_cmd="bin/stop-cluster.sh",
         proc_master="org.apache.flink.runtime.entrypoint.StandaloneSessionClusterEntrypoint",
         proc_worker="org.apache.flink.runtime.taskexecutor.TaskManagerRunner",
         logo_url="https://flink.apache.org/img/logo/png/200/flink_squirrel_200_color.png",

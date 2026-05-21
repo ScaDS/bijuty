@@ -42,4 +42,10 @@ __all__ = [
     "MultiFrameworkManager",
 ]
 
-MultiFrameworkManager().display()
+# Only auto-display when running inside an IPython kernel
+try:
+    from IPython import get_ipython
+    if get_ipython() is not None:
+        MultiFrameworkManager().display()
+except ImportError:
+    pass
