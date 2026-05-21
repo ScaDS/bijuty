@@ -215,7 +215,8 @@ class ProcessMetricCollector:
         """Extract metrics from a process."""
         try:
             with proc.oneshot():
-                cpu = psutil.cpu_percent(percpu=True)[proc.cpu_num()]
+                # cpu = psutil.cpu_percent(percpu=True)[proc.cpu_num()]
+                cpu = proc.cpu_percent(interval=DEFAULT_REFRESH_INTERVAL)
                 mem = proc.memory_info()
                 mem_pct = proc.memory_percent()
                 threads = proc.num_threads()
