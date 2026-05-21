@@ -2,7 +2,7 @@
 
 Connects to the Spark REST API (port 4040) to fetch application-level metrics
 (jobs, stages, tasks, executors, shuffle I/O) and renders them via the shared
-:py:class:`~big_data_utils.metric_plotter.MetricDashboard`.
+:py:class:`~bijuty.metric_plotter.MetricDashboard`.
 """
 
 from __future__ import annotations

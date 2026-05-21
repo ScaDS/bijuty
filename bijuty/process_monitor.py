@@ -2,7 +2,7 @@
 
 This module provides classes for collecting process metrics
 (CPU usage, memory consumption, thread count, I/O statistics).
-The visualization layer has been moved to :py:mod:`~big_data_utils.metric_plotter`.
+The visualization layer has been moved to :py:mod:`~bijuty.metric_plotter`.
 """
 
 from __future__ import annotations

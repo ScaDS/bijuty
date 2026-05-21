@@ -1,5 +1,5 @@
 """
-Utility functions and classes for the big_data_utils package.
+Utility functions and classes for the bijuty package.
 
 This module provides common utilities including logging, environment file handling,
 and safe bash command execution.

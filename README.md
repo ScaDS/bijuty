@@ -54,7 +54,7 @@ jupyter labextension install @jupyter-widgets/jupyterlab-manager
 To get started, simply import the package in a notebook cell. It automatically displays the interactive **Framework Manager** GUI:
 
 ```python
-import big_data_utils
+import bijuty
 ```
 
 This launches a tabbed interface where you can:
@@ -71,7 +71,7 @@ Add new cluster tabs with **+** and remove them with **x**.
 If you prefer to control when the GUI appears:
 
 ```python
-from big_data_utils import MultiFrameworkManager
+from bijuty import MultiFrameworkManager
 
 manager = MultiFrameworkManager()
 manager.display()
@@ -80,7 +80,7 @@ manager.display()
 Or use the single-cluster GUI directly:
 
 ```python
-from big_data_utils.gui_utils import GUIUtils
+from bijuty.gui_utils import GUIUtils
 
 gui = GUIUtils()
 gui.launch_gui_config()
@@ -130,8 +130,8 @@ For scripts and automated workflows, use the programmatic APIs instead of the GU
 ### BigDataManager (Recommended)
 
 ```python
-from big_data_utils.big_data_manager import BigDataManager
-from big_data_utils.gui_components import FRAMEWORK_REGISTRY
+from bijuty.big_data_manager import BigDataManager
+from bijuty.gui_components import FRAMEWORK_REGISTRY
 
 bdm = BigDataManager()
 
@@ -163,7 +163,7 @@ bdm.stop_cluster()
 ### ClusterService (Legacy API)
 
 ```python
-from big_data_utils.cluster_utils import ClusterService
+from bijuty.cluster_utils import ClusterService
 
 cluster = ClusterService("spark")
 cluster.start_cluster()
@@ -175,7 +175,7 @@ cluster.stop_cluster()
 ### SLURM Utilities
 
 ```python
-from big_data_utils.slurm_utils import SlurmManager
+from bijuty.slurm_utils import SlurmManager
 
 slurm = SlurmManager()
 print(slurm.job_id)
