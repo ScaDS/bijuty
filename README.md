@@ -1,4 +1,4 @@
-# Big Data Environment Setup for JupyterHub
+# BiJuTy
 
 ## Description
 
@@ -6,15 +6,16 @@ This project provides a Python module with interactive tools to configure and ma
 
 It includes:
 - An interactive GUI for framework selection, resource allocation, cluster configuration, and start/stop controls
-- Automatic SLURM environment detection and node discovery
+- Automatic SLURM environment detection and information extraction
 - Support for running multiple independent framework clusters via a tabbed interface
-- Programmatic APIs for advanced scripting
-
+- Permormance metrics
 ---
 
 ## Prerequisites
 
 - Python >= 3.11.5
+- Apache Spark 3.5.0
+- Apache Flink 1.14.1
 - A JupyterHub / Jupyter Notebook environment
 - `ipywidgets` enabled in Jupyter (the package depends on it)
 - An active SLURM job allocation (the tool auto-detects SLURM resources)
@@ -32,7 +33,7 @@ Install the package directly from the GitLab repository inside a Jupyter noteboo
 Or install from a local clone:
 
 ```bash
-git clone https://gitlab.hrz.tu-chemnitz.de/apku868a--tu-dresden.de/big-data-environment-setup-for-jupyterhub.git
+git clone https://gitlab.hrz.tu-chemnitz.de/apku868a--tu-dresden.de/bijuty.git
 cd big-data-environment-setup-for-jupyterhub
 pip install -e .
 ```
@@ -71,7 +72,7 @@ Add new cluster tabs with **+** and remove them with **x**.
 If you prefer to control when the GUI appears:
 
 ```python
-from bijuty import MultiFrameworkManager
+from BiJuTy import MultiFrameworkManager
 
 manager = MultiFrameworkManager()
 manager.display()
@@ -80,7 +81,7 @@ manager.display()
 Or use the single-cluster GUI directly:
 
 ```python
-from bijuty.gui_utils import GUIUtils
+from BiJuTy.gui_utils import GUIUtils
 
 gui = GUIUtils()
 gui.launch_gui_config()
@@ -130,8 +131,8 @@ For scripts and automated workflows, use the programmatic APIs instead of the GU
 ### BigDataManager (Recommended)
 
 ```python
-from bijuty.big_data_manager import BigDataManager
-from bijuty.gui_components import FRAMEWORK_REGISTRY
+from BiJuTy.big_data_manager import BigDataManager
+from BiJuTy.gui_components import FRAMEWORK_REGISTRY
 
 bdm = BigDataManager()
 
@@ -163,7 +164,7 @@ bdm.stop_cluster()
 ### ClusterService (Legacy API)
 
 ```python
-from bijuty.cluster_utils import ClusterService
+from BiJuTy.cluster_utils import ClusterService
 
 cluster = ClusterService("spark")
 cluster.start_cluster()
@@ -175,7 +176,7 @@ cluster.stop_cluster()
 ### SLURM Utilities
 
 ```python
-from bijuty.slurm_utils import SlurmManager
+from BiJuTy.slurm_utils import SlurmManager
 
 slurm = SlurmManager()
 print(slurm.job_id)
@@ -262,7 +263,7 @@ docker buildx create --use
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0-or-later) - see the [LICENSE](./LICENSE) file for details.
 
 ## Contact
 

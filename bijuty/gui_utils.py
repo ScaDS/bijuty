@@ -306,13 +306,14 @@ class GUIUtils:
         info_widget = self.widgets.get("cluster_info")
         if info_widget is None:
             return
-        master = self.get_selected_master_host() or "-"
-        master_port = self.get_selected_master_port() or "-"
-        workers = self.get_selected_workers()
-        workers_str = ", ".join(workers) if workers else "-"
         running = self.bdm.is_cluster_up()
         status_color = "#28a745" if running else "#dc3545"
         status_text = "Running" if running else "Stopped"
+
+        master = self.get_selected_master_host() if running else "-"
+        master_port = self.get_selected_master_port() if running else "-"
+        workers = self.get_selected_workers() if running else "-"
+        workers_str = ", ".join(workers) if (workers and running) else "-"
         info_widget.value = (
             f"<div style='font-size:12px; color:#555; margin-top:4px;display:flex; flex-direction:column;width:100%; justify-content:center; align-items:center;'>"
             # f"<div style='width:80%; justify-content:left; align-items:center;'>"

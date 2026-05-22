@@ -37,6 +37,7 @@
   display: flex;
   padding: 20px;
   color: #ffffff !important;
+  width: 90vw;
 }
 
 .slurm-card {

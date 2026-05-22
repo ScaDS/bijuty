@@ -15,11 +15,11 @@ setup(
     author="Apurv Deepak Kulkarni",
     author_email="apurv.kulkarni@tu-dresden.de",
     description="An interactive dashboard for manageing big data cluster lifecycle on jupyterhub running on HPC system.",
-    license="MIT",
+    license="GPL-3.0-or-later",
     url="https://github.com/apurvkulkarni7/bijuty",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.11.5',

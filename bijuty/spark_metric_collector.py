@@ -35,9 +35,11 @@ MAX_REFRESH_INTERVAL = 60.0
 # All metrics are collected regardless; this list only affects plotting.
 ENABLED_METRICS = [
     "total_memory_mb",
+    "total_disk_usage_mb",
     "total_shuffle_read_mb",
     "total_shuffle_write_mb",
     "total_gc_time_ms",
+    "total_duration_ms",
     "jvm_heap_used_mb",
 ]
 
@@ -62,10 +64,12 @@ class SparkMetricsSnapshot:
     executor_count: int
     total_cores: int
     total_memory_mb: float
+    total_disk_usage_mb: float
     total_input_mb: float
     total_shuffle_read_mb: float
     total_shuffle_write_mb: float
     total_gc_time_ms: float
+    total_duration_ms: float
     jvm_heap_used_mb: float
     timestamp: str
 
@@ -110,6 +114,9 @@ class SparkMetricsHistory:
     total_memory_mb: deque[float] = field(
         default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE)
     )
+    total_disk_usage_mb: deque[float] = field(
+        default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE)
+    )
     total_input_mb: deque[float] = field(
         default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE)
     )
@@ -120,6 +127,9 @@ class SparkMetricsHistory:
         default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE)
     )
     total_gc_time_ms: deque[float] = field(
+        default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE)
+    )
+    total_duration_ms: deque[float] = field(
         default_factory=lambda: deque([0.0] * DEFAULT_HISTORY_SIZE, maxlen=DEFAULT_HISTORY_SIZE)
     )
     jvm_heap_used_mb: deque[float] = field(
@@ -142,11 +152,15 @@ class SparkMetricsHistory:
         self.executor_count.append(metrics.executor_count)
         self.total_cores.append(metrics.total_cores)
         self.total_memory_mb.append(metrics.total_memory_mb)
+        self.total_disk_usage_mb.append(metrics.total_disk_usage_mb)
         self.total_input_mb.append(metrics.total_input_mb)
         self.total_shuffle_read_mb.append(metrics.total_shuffle_read_mb)
         self.total_shuffle_write_mb.append(metrics.total_shuffle_write_mb)
         self.total_gc_time_ms.append(metrics.total_gc_time_ms)
+        self.total_duration_ms.append(metrics.total_duration_ms)
         self.jvm_heap_used_mb.append(metrics.jvm_heap_used_mb)
+        
+
         self.timestamp.append(metrics.timestamp)
 
 
@@ -215,6 +229,7 @@ class SparkMetricCollector:
             executor_count = len(executors)
             total_cores = sum(e.get("totalCores", 0) for e in executors)
             total_memory = sum(e.get("memoryUsed", 0) for e in executors) / (1024 ** 2)
+            total_disk_usage = sum(e.get("diskUsed", 0) for e in executors) / (1024 ** 2)
             total_input = sum(e.get("totalInputBytes", 0) for e in executors) / (1024 ** 2)
             total_shuffle_read = (
                 sum(e.get("totalShuffleRead", 0) for e in executors) / (1024 ** 2)
@@ -223,6 +238,7 @@ class SparkMetricCollector:
                 sum(e.get("totalShuffleWrite", 0) for e in executors) / (1024 ** 2)
             )
             total_gc_time = sum(e.get("totalGCTime", 0) for e in executors)
+            total_duration = sum(e.get("totalDuration", 0) for e in executors)
             jvm_heap_used = 0
             for e in executors:
                 peak = e.get("peakMemoryMetrics", {})
@@ -246,10 +262,12 @@ class SparkMetricCollector:
                 executor_count=executor_count,
                 total_cores=total_cores,
                 total_memory_mb=total_memory,
+                total_disk_usage_mb=total_disk_usage,
                 total_input_mb=total_input,
                 total_shuffle_read_mb=total_shuffle_read,
                 total_shuffle_write_mb=total_shuffle_write,
                 total_gc_time_ms=total_gc_time,
+                total_duration_ms=total_duration,
                 jvm_heap_used_mb=jvm_heap_used / (1024 ** 2),
                 timestamp=datetime.now().strftime("%H:%M:%S"),
             )
@@ -376,11 +394,13 @@ class SparkMetricMonitor(MetricDashboard):
             "failed_tasks": "Failed Tasks",
             "executor_count": "Executors",
             "total_cores": "Total Cores",
-            "total_memory_mb": "Memory (MB)",
+            "total_memory_mb": "Memory Used (MB)",
+            "total_disk_usage_mb": "Disk Usage (MB)",
             "total_input_mb": "Input (MB)",
             "total_shuffle_read_mb": "Shuffle Read (MB)",
             "total_shuffle_write_mb": "Shuffle Write (MB)",
             "total_gc_time_ms": "GC Time (ms)",
+            "total_duration_ms": "Execution Time (ms)",
             "jvm_heap_used_mb": "JVM Heap Used (MB)",
         }
         return display_map.get(metric, metric)
