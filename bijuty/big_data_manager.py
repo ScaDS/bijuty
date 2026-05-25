@@ -634,17 +634,14 @@ class BigDataManager:
     def cleanup_cluster(self) -> None:
         """Forcefully terminate all cluster-related processes."""
         required_procs = list(self.get_fw_cluster_processes(all_procs=True))
-
-        if not required_procs or all(not p for p in required_procs):
+        required_procs_list = [i['pattern'] for i in required_procs]
+        if not required_procs_list or all(not p for p in required_procs_list):
             logger.error(f"No process names defined for {self._user_inputs.fw_name}")
             return
-
-        found_procs = self._find_cluster_processes(required_procs)
-
+        found_procs = self._find_cluster_processes(required_procs_list)
         if not found_procs:
             logger.info(f"No running processes found for {self._user_inputs.fw_name}")
             return
-
         logger.info(f"Terminating {len(found_procs)} {self._user_inputs.fw_name} processes")
         self._terminate_processes(found_procs)
 
