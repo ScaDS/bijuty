@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 from IPython.display import display
 from plotly.subplots import make_subplots
 
-from .gui_components import WidgetFactory
+from ..gui.widgets import WidgetFactory
 
 
 # =============================================================================

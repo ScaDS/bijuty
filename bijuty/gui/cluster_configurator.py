@@ -22,20 +22,20 @@ from contextlib import redirect_stdout, redirect_stderr
 import ipywidgets as widgets
 from IPython.display import clear_output, display
 
-from .big_data_manager import BigDataManager
-from .gui_components import (
-    FRAMEWORK_REGISTRY,
-    HTMLGenerator,
+from ..big_data_manager import BigDataManager
+from .config import FRAMEWORK_REGISTRY
+from .html import HTMLGenerator
+from .widgets import (
     WidgetFactory,
+    VBox,
+    HBox,
     create_placeholder_logo,
     fetch_image,
-    VBox,
-    HBox
 )
-from .slurm_utils import SlurmManager
-from .process_monitor import ProcessMonitor
-from .spark_metric_collector import SparkMetricMonitor
-from .utils import run_bash_command, logger, get_file_content
+from ..slurm_utils import SlurmManager
+from ..monitoring.process import ProcessMonitor
+from ..monitoring.spark import SparkMetricMonitor
+from ..utils import run_bash_command, logger, get_file_content
 
 
 # logger = SimpleLogger()
@@ -45,7 +45,7 @@ from .utils import run_bash_command, logger, get_file_content
 # Main GUI Class
 # =============================================================================
 
-class GUIUtils:
+class ClusterConfigurator:
     """
     GUI utilities for configuring and managing big data frameworks.
 
@@ -832,7 +832,7 @@ class GUIUtils:
         # Inject CSS for text wrapping in output area
         html_header_content = f"""
         <style>
-        {get_file_content(os.path.join(os.path.dirname(__file__),"style.css"))}
+        {get_file_content(os.path.join(os.path.dirname(__file__), "..", "style.css"))}
         </style>
         <script>
         var el = document.querySelector('.id-log');

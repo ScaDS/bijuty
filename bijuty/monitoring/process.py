@@ -17,9 +17,9 @@ from datetime import datetime
 
 import psutil
 
-from .gui_components import WidgetFactory
-from .metric_plotter import MetricDashboard
-from .slurm_utils import SlurmManager
+from ..gui.widgets import WidgetFactory
+from .dashboard import MetricDashboard
+from ..slurm_utils import SlurmManager
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -178,14 +178,7 @@ class ProcessMetricCollector:
         }
 
     def _match_process(self, proc: psutil.Process) -> dict | None:
-        """Check if a process matches any of the monitored process names.
-
-        Args:
-            proc: The process to check.
-
-        Returns:
-            The matching process dict with keys 'title' & 'pattern', or None.
-        """
+        """Check if a process matches any of the monitored process names."""
         try:
             try:
                 status = proc.status()
@@ -243,13 +236,7 @@ class ProcessMetricCollector:
         return None
 
     def collect(self) -> dict[str, dict[str, Any]]:
-        """Collect metrics from all matching processes.
-
-        Returns:
-            A dictionary mapping process titles to their metric data.
-            Each value contains 'found' (bool), 'history'
-            (ProcessMetricsHistory), and 'proc_info' (psutil.Process).
-        """
+        """Collect metrics from all matching processes."""
         results: dict[str, dict[str, Any]] = {}
         if not self.process_names:
             return results
@@ -282,11 +269,7 @@ class ProcessMetricCollector:
 # =============================================================================
 
 class ProcessMonitor(MetricDashboard):
-    """Interactive Jupyter widget for monitoring process resources.
-
-    Provides a dashboard with start/stop controls and real-time plots
-    of process metrics. Can monitor multiple processes simultaneously.
-    """
+    """Interactive Jupyter widget for monitoring process resources."""
 
     def __init__(
         self,
@@ -325,11 +308,7 @@ class ProcessMonitor(MetricDashboard):
         )
 
     def set_process_names(self, process_names: Sequence[dict]) -> None:
-        """Update the process names to monitor.
-
-        Args:
-            process_names: List of dicts with keys 'title' and 'pattern'.
-        """
+        """Update the process names to monitor."""
         self.process_names = list(process_names)
         self.collector = ProcessMetricCollector(self.process_names)
 

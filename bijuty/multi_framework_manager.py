@@ -12,8 +12,8 @@ from typing import Any
 import ipywidgets as widgets
 from IPython.display import display
 
-from .gui_utils import GUIUtils
-from .gui_components import FRAMEWORK_REGISTRY
+from .gui.cluster_configurator import ClusterConfigurator
+from .gui.config import FRAMEWORK_REGISTRY
 
 
 class MultiFrameworkManager:
@@ -58,7 +58,7 @@ class MultiFrameworkManager:
         self._gui_instances.clear()
 
         # Create initial single tab
-        gui = GUIUtils()
+        gui = ClusterConfigurator()
         gui.launch_gui_config(display_gui=False)
         self._gui_instances.append(gui)
 

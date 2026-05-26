@@ -14,10 +14,10 @@ from datetime import datetime
 
 import requests
 
-from .gui_components import WidgetFactory
-from .metric_plotter import MetricDashboard
-from .slurm_utils import SlurmManager
-from .utils import debug_write_to_file
+from ..gui.widgets import WidgetFactory
+from .dashboard import MetricDashboard
+from ..slurm_utils import SlurmManager
+from ..utils import debug_write_to_file
 
 # =============================================================================
 # Constants

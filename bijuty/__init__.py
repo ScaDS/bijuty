@@ -20,18 +20,22 @@ except ImportError:
 # logging.getLogger('Comm').addFilter(IgnoreNoSuchComm())
 
 # Import GUI components for easy access
-from .gui_utils import GUIUtils
-from .gui_components import (
+from .gui.cluster_configurator import ClusterConfigurator
+from .gui.config import (
     FRAMEWORK_REGISTRY,
-    HTMLGenerator,
-    WidgetFactory,
     FrameworkConfig,
     ResourceAllocation,
     COLOR_SCHEME,
 )
+from .gui.html import HTMLGenerator
+from .gui.widgets import WidgetFactory
 from .multi_framework_manager import MultiFrameworkManager
 
+# Backwards-compatible alias
+GUIUtils = ClusterConfigurator
+
 __all__ = [
+    "ClusterConfigurator",
     "GUIUtils",
     "FRAMEWORK_REGISTRY",
     "HTMLGenerator",

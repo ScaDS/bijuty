@@ -20,8 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import psutil
 
 from .slurm_utils import SlurmManager
-from .gui_components import FrameworkConfig
-from .process_monitor import ProcessMonitor
+from .gui.config import FrameworkConfig
+from .monitoring.process import ProcessMonitor
 from .utils import logger, run_bash_command
 
 # =============================================================================
