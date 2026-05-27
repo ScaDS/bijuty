@@ -1,0 +1,2 @@
+#!/bin/bash
+FRAMEWORK_BIN_DIR/spark-submit --master spark://FRAMEWORK_MASTER_NODE:7077 --deploy-mode client $@
