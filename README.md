@@ -1,21 +1,15 @@
-
-
-<div style="display: flex; flex-direction:column; justify-content: center; width:100%;margin: 0px auto;">
-    <div style="font-size:30px;font-weight:bold;margin: 0px auto;"> BiJuTy </div>
-    <div style="margin: 0px auto; max-width:400px; display: flex;text-align: center">
-        An Interactive HPC-Aware Big Data Cluster Lifecycle Manager and Performance Assessment Utility for JupyterHub
-    </div>
+<div align="center">
+  <h1>BiJuTy</h1>
+  <p> An Interactive HPC-Aware Big Data Cluster Lifecycle Manager and Performance Assessment Utility for JupyterHub </p>
 </div>
-
-
-
-## About
-
-BiJuTy (pronounced BYOO-tee) is an interactive Jupyter Notebook-based framework that simplifies cluster lifecycle management and performance assessment on HPC systems for users of all experience levels. It enables seamless multi-cluster management, automates performance metric collection, and allows users to iteratively optimize big data applications in just a few clicks.
 
 <div align="center">
   <img src="./docs/demo.gif" alt="Demo" width="100%" />
 </div>
+
+## About
+
+BiJuTy (pronounced BYOO-tee) is an interactive Jupyter Notebook-based framework that simplifies cluster lifecycle management and performance assessment on HPC systems for users of all experience levels. It enables seamless multi-cluster management, automates performance metric collection, and allows users to iteratively optimize big data applications in just a few clicks.
 
 ## Getting Started
 
