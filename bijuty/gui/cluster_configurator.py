@@ -1026,7 +1026,7 @@ class ClusterConfigurator:
             )
         
     def _set_framework_home(self) -> None:
-        os.environ[f"{self.get_selected_framework_home()}_HOME"] = self.get_selected_framework_home()
+        os.environ[f"{self.get_selected_framework_name()}_HOME"] = self.get_selected_framework_home()
     
     def _create_conf_dest_dir(self) -> None:
         os.makedirs(os.path.dirname(self.get_selected_config_destination()),exist_ok=True)
@@ -1051,13 +1051,13 @@ class ClusterConfigurator:
         node_cpu_capacity = self.slurm_info.get_cpus_per_node()
 
         # Calculate heights
-        master_mem_height = max((drv_mem / node_mem_capacity) * 100,25)
-        worker_mem_height = max((wrk_mem / node_mem_capacity) * 100,25)
-        executor_mem_height = max((exe_mem / wrk_mem) * 100, 25)# (exe_mem / wrk_mem) * 100 if wrk_mem > 0 else 0
+        # master_mem_height = max((drv_mem / node_mem_capacity) * 100,25)
+        # worker_mem_height = max((wrk_mem / node_mem_capacity) * 100,25)
+        # executor_mem_height = max((exe_mem / wrk_mem) * 100, 25)# (exe_mem / wrk_mem) * 100 if wrk_mem > 0 else 0
 
-        master_cpu_height = max((drv_cpu / node_cpu_capacity) * 100, 25)
-        worker_cpu_height = max((wrk_cpu / node_cpu_capacity) * 100, 25)
-        executor_cpu_height = max((exe_cpu / wrk_cpu) * 100, 25) if wrk_cpu > 0 else 0
+        # master_cpu_height = max((drv_cpu / node_cpu_capacity) * 100, 25)
+        # worker_cpu_height = max((wrk_cpu / node_cpu_capacity) * 100, 25)
+        # executor_cpu_height = max((exe_cpu / wrk_cpu) * 100, 25) if wrk_cpu > 0 else 0
 
         return {
             # "total_mem": "100%",

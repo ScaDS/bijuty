@@ -6,6 +6,7 @@ requests>=2.28.0
 plotly>=5.0.0
 
 # Development and testing dependencies
+pyspark==3.5.3
 pytest>=7.0.0
 pytest-cov>=4.0.0
 
