@@ -1110,7 +1110,7 @@ class ClusterConfigurator:
             os.path.dirname(self.get_selected_config_destination())
         )
         
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),"..")
         
         bash_command = (
             f"cd {script_dir} && source ./framework-configure.sh "

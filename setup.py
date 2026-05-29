@@ -4,6 +4,14 @@ setup(
     name="bijuty",
     version="0.1.0",
     packages=find_packages(),
+    package_data={
+        'bijuty': [
+            '*.css',
+            '*.sh',
+            'framework_template/**/*',
+        ],
+    },
+    include_package_data=True,
     install_requires=[
         "ipywidgets>=8.0.0",
         "ipython>=8.0.0",
