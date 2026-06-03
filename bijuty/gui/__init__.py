@@ -18,7 +18,7 @@ from .widgets import (
     DEFAULT_LABEL_STYLE,
     DEFAULT_WIDGET_LAYOUT,
 )
-from .cluster_configurator import ClusterConfigurator
+from .main import GUIMain
 
 __all__ = [
     # config
@@ -38,6 +38,7 @@ __all__ = [
     "fetch_image",
     "DEFAULT_LABEL_STYLE",
     "DEFAULT_WIDGET_LAYOUT",
-    # cluster_configurator
-    "ClusterConfigurator",
+    # Main gui class
+    "GUIMain",
+    "MultiFrameworkManager"
 ]
