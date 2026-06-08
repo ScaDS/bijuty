@@ -324,6 +324,17 @@ class FlinkMetricMonitor(MetricDashboard):
             extra_header_widgets=extra,
         )
 
+    def set_monitor(self, user_input: Dict = None, base_url=None):
+        if base_url:
+            self._base_url = base_url
+        else:
+            if user_input:
+                self._base_url = f"http://{user_input.master}:8081"
+            else:
+                raise Exception("Please provide base url")
+
+        self.collector = FlinkMetricCollector(base_url=self._base_url)
+
     def _get_metric_display_name(self, metric: str) -> str:
         display_map = {
             "total_jobs": "Total Jobs",

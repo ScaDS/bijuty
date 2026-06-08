@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
+import requests
 
 import psutil
 
@@ -465,7 +466,10 @@ class BigDataManager:
         if all_procs:
             other_procs = fw_config.proc_other
             # return (master_proc, worker_proc, *other_procs)
-            return [*other_procs]
+            try:
+                return [*other_procs]
+            except:
+                return []
 
         return (master_proc, worker_proc)
         
@@ -484,15 +488,14 @@ class BigDataManager:
         if len(processes) < 2:
             return False
 
-        master_proc, worker_proc = processes[0], processes[1]
+        master_proc, _ = processes[0], processes[1]
         master_proc_patt = master_proc.get("pattern")
-        worker_proc_patt = worker_proc.get("pattern")
+        # worker_proc_patt = worker_proc.get("pattern")
         current_user = getpass.getuser()
         expected_workers = len(self._get_worker_hosts())
 
         found_master = False
-        worker_count = 0
-
+        
         for proc in psutil.process_iter(["username", "cmdline"]):
             try:
                 if proc.info["username"] != current_user:
@@ -505,22 +508,18 @@ class BigDataManager:
                 cmdline_str = " ".join(cmdline)
 
                 # Log for debugging
-                if master_proc_patt in cmdline_str or worker_proc_patt in cmdline_str:
-                    logger.debug(f"Checking PID {proc.pid}: {cmdline_str}")
-
+                # if master_proc_patt in cmdline_str :
+                #     logger.debug(f"Checking PID {proc.pid}: {cmdline_str}")
+                
                 if master_proc_patt in cmdline_str:
                     found_master = True
-
-                if worker_proc_patt in cmdline_str:
-                    for worker in self._get_worker_hosts():
-                        if worker in cmdline_str:
-                            worker_count += 1
-                            break
-
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
+        
 
-        workers_up = worker_count >= expected_workers
+        workers_up, worker_count, err_msg = self.verify_cluster_workers()
+        logger.debug(f"Worker Up: {workers_up}, Worker count:{worker_count}, Error Msg: {err_msg}")
+        
         logger.debug(
             f"Status: Master {'UP' if found_master else 'DOWN'}, "
             f"Workers: {worker_count}/{expected_workers} {'UP' if workers_up else 'DOWN'}"
@@ -695,6 +694,61 @@ class BigDataManager:
                     continue
 
         logger.info(f"Cleanup complete for {self._user_inputs.fw_name}")
+
+
+    def verify_cluster_workers(self):
+        """
+        Checks if all workers listed in a local text file are active in the cluster.
+        Currently only number of workers are counted without matching the exact hostname.
+        :return: True if all hosts in the user selection are active in the cluster, False otherwise
+        """
+        
+        framework = self._user_inputs.fw_name.lower()
+        
+        worker_list = self._get_worker_hosts()
+        if worker_list is not None and len(worker_list) < 1:
+            return False
+            
+        expected_hosts = set()
+        for worker_i in worker_list:
+            expected_hosts.add(worker_i)
+        
+        if not expected_hosts:
+            return False
+
+        #port = self._get_master_port()
+        host = self._get_master_host()
+        if framework == "spark":
+            port = 8080    
+            url = f"http://{host}:{port}/json/"
+        elif framework == "flink":
+            port = 8081
+            url = f"http://{host}:{port}/taskmanagers"
+        else:
+            return False
+
+        active_hosts = set()
+        try:
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            data = response.json()    
+        
+            if framework == "spark":
+                workers = data.get("workers", [])
+                for w in workers:
+                    if w.get("state") == "ALIVE":
+                        logger.info(w)
+                        # Spark returns raw hostnames/IPs
+                        active_hosts.add(w.get("host").strip())
+
+            elif framework == "flink":
+                active_hosts = data.get("taskmanagers", [])
+
+            # 4. Strictly evaluate if all expected hosts exist in the active set
+            return len(expected_hosts) == len(active_hosts), len(active_hosts), ""
+
+        except requests.exceptions.RequestException as e:
+            return False, len(active_hosts), e
 
     # =====================================================================
     # Metrics
