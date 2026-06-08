@@ -105,7 +105,7 @@ class SimpleLogger:
 
 # Global logger instance
 logger = SimpleLogger()
-logger.set_log_level(LogLevel.DEBUG)
+logger.set_log_level(LogLevel.INFO)
 
 # =============================================================================
 # Environment Functions
