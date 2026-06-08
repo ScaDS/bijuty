@@ -154,8 +154,8 @@ class SlurmManager:
             self._job_name = ""
             self._start_time = ""
             self._partition = ""
-        
-        
+
+
         self._login_node = self._get_default_login_host()
         self._resources: Optional[JobResources] = None
 
@@ -178,7 +178,7 @@ class SlurmManager:
     @property
     def job_info(self) -> Dict[str, Any]:
         return self._job_info if self._job_info else {}
-    
+
     @property
     def login_node(self) -> str:
         return self._login_node
@@ -186,7 +186,7 @@ class SlurmManager:
     @property
     def job_name(self) -> str:
         return self._job_name
-    
+
     @property
     def start_time(self) -> str:
         return self._start_time
@@ -278,14 +278,14 @@ class SlurmManager:
         if self._resources is None:
             self._resources = self._parse_job_resources()
         return self._resources
-    
+
     def _get_default_login_host(self):
         fqdn = socket.getfqdn().strip()
         parts = fqdn.split('.',2)
         if len(parts) > 2:
             return f"login1.{parts[1]}.{parts[2]}"
         return "localhost"
-    
+
     def _parse_job_info(self):
         for job_i in self._job_info_raw["jobs"]:
             if int(job_i["job_id"]) == int(self.job_id):

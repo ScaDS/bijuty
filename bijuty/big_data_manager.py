@@ -329,7 +329,7 @@ class BigDataManager:
     #     conf_dir_full = f"{self._conf_dest}/{self._user_inputs.fw_name.lower()}"
     #     os.environ[f"{self._user_inputs.fw_name}_CONF_DIR"] = conf_dir_full
     #     logger.info(os.environ.items())
-        
+
 
     # def _setup_spark_configuration(self) -> None:
     #     """Set up Spark-specific configuration."""
@@ -472,7 +472,7 @@ class BigDataManager:
                 return []
 
         return (master_proc, worker_proc)
-        
+
 
     # =====================================================================
     # Cluster Status
@@ -484,7 +484,7 @@ class BigDataManager:
             return False
 
         processes = self.get_fw_cluster_processes()
-        
+
         if len(processes) < 2:
             return False
 
@@ -495,7 +495,7 @@ class BigDataManager:
         expected_workers = len(self._get_worker_hosts())
 
         found_master = False
-        
+
         for proc in psutil.process_iter(["username", "cmdline"]):
             try:
                 if proc.info["username"] != current_user:
@@ -510,16 +510,16 @@ class BigDataManager:
                 # Log for debugging
                 # if master_proc_patt in cmdline_str :
                 #     logger.debug(f"Checking PID {proc.pid}: {cmdline_str}")
-                
+
                 if master_proc_patt in cmdline_str:
                     found_master = True
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
-        
+
 
         workers_up, worker_count, err_msg = self.verify_cluster_workers()
         logger.debug(f"Worker Up: {workers_up}, Worker count:{worker_count}, Error Msg: {err_msg}")
-        
+
         logger.debug(
             f"Status: Master {'UP' if found_master else 'DOWN'}, "
             f"Workers: {worker_count}/{expected_workers} {'UP' if workers_up else 'DOWN'}"
@@ -567,13 +567,13 @@ class BigDataManager:
 
     def start_cluster(self) -> bool:
         """Start the big data cluster."""
-        
+
         if not self._initialized:
             logger.error("BigDataManager must be initialized before setup_config")
             return 1
-        
+
         # Stop existing cluster if running
-        if self.is_cluster_up():    
+        if self.is_cluster_up():
             logger.info(f"{self._user_inputs.fw_name} cluster already running - stopping first")
             self.stop_cluster()
 
@@ -610,7 +610,7 @@ class BigDataManager:
         log_path = self.get_cluster_log_file()
         fw_name = self._user_inputs.fw_name.upper()
         conf_dir = os.environ[f"{fw_name}_CONF_DIR"]
-        
+
         try:
             log_path = self.get_cluster_log_file()
             full_cmd = f"{conf_dir}/cmd.sh stop {conf_dir} > {log_path} 2>&1"
@@ -702,24 +702,24 @@ class BigDataManager:
         Currently only number of workers are counted without matching the exact hostname.
         :return: True if all hosts in the user selection are active in the cluster, False otherwise
         """
-        
+
         framework = self._user_inputs.fw_name.lower()
-        
+
         worker_list = self._get_worker_hosts()
         if worker_list is not None and len(worker_list) < 1:
             return False
-            
+
         expected_hosts = set()
         for worker_i in worker_list:
             expected_hosts.add(worker_i)
-        
+
         if not expected_hosts:
             return False
 
         #port = self._get_master_port()
         host = self._get_master_host()
         if framework == "spark":
-            port = 8080    
+            port = 8080
             url = f"http://{host}:{port}/json/"
         elif framework == "flink":
             port = 8081
@@ -731,8 +731,8 @@ class BigDataManager:
         try:
             response = requests.get(url, timeout=5)
             response.raise_for_status()
-            data = response.json()    
-        
+            data = response.json()
+
             if framework == "spark":
                 workers = data.get("workers", [])
                 for w in workers:

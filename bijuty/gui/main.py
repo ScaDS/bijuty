@@ -151,16 +151,16 @@ class GUIMain(GUIEnvSetup):
         if wrap_function_stdout:
             if func is None:
                 raise ValueError("func must be provided when wrap_function_stdout=True")
-            
+
             stdout_capture = io.StringIO()
             stderr_capture = io.StringIO()
-            
+
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 result = func()
-            
+
             stdout_output = stdout_capture.getvalue()
             stderr_output = stderr_capture.getvalue()
-            
+
             with self.widgets["output_area"]:
                 if stdout_output:
                     logger.info(stdout_output)
@@ -194,7 +194,7 @@ class GUIMain(GUIEnvSetup):
             self._handle_setup_error(e)
         # finally:
         #     self.widgets["load_button"].disabled = False
-            
+
     def _reinitalize_dashboard(self) -> None:
         self.process_monitor.set_process_names(self.bdm.get_fw_cluster_processes(all_procs=True))
         fw_monitor = self._get_framework_monitor()
@@ -273,7 +273,7 @@ class GUIMain(GUIEnvSetup):
                 url=url,
             )
             btn_widget = WidgetFactory.update_widget_state(btn_widget,disable=True)
-            
+
             return btn_widget
         if web_ui_links:
             for port, title in web_ui_links:
@@ -301,13 +301,13 @@ class GUIMain(GUIEnvSetup):
             """
             instructions_widget = widgets.HTML(value=instructions_html)
             instructions_widget = WidgetFactory.update_widget_state(instructions_widget,disable=True)
-            
+
         return VBox(
             [
                 # self._create_header("Framework Web Interface"),
                 widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
                 instructions_widget
-                
+
             ],layout=widgets.Layout(width="50%", padding="8px")
         )
 
@@ -365,8 +365,8 @@ class GUIMain(GUIEnvSetup):
 
             html_content += "</div>"
             info_widget.value = html_content
-            
-            
+
+
 
     def _create_header(self, title: str) -> widgets.HTML:
         """Create the GUI header widget."""
@@ -498,7 +498,7 @@ class GUIMain(GUIEnvSetup):
             default_cpu_worker = FRAMEWORK_REGISTRY[fw_name].default_resources.get("cpu_worker", 1)
         except:
             default_cpu_worker = 1
-        
+
         return WidgetFactory.create_slider(
             value=1,
             min_val=1,
@@ -525,7 +525,7 @@ class GUIMain(GUIEnvSetup):
             step=1,
             description="Cores / Compute Units:",
             tooltip="""The number of CPU cores assigned to each individual compute unit from the total pool set in "Core Pool per Node." This determines how many parallel compute units can be initialized on each node.\n- Spark: SPARK_EXECUTOR_CORES\n- Flink: taskmanager.numberOfTaskSlots""",
-            
+
         )
 
     def _create_driver_memory_widget(self) -> widgets.IntSlider:
@@ -597,7 +597,7 @@ class GUIMain(GUIEnvSetup):
         button.disabled = not self.is_config_set
         button.on_click(self._on_stop_cluster_clicked)
         return button
-    
+
     def _create_metric_dashboard(self) -> widgets.Box:
         """Create the metric dashboard widget."""
         fw_monitor = self._get_framework_monitor()
@@ -740,7 +740,7 @@ class GUIMain(GUIEnvSetup):
             self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
         self._update_cluster_info()
-        
+
     def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle stop cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
@@ -782,23 +782,23 @@ class GUIMain(GUIEnvSetup):
             self.widgets["framework_gui"].disable()
         else:
             self.widgets["framework_gui"].enable()
-    
+
     def _update_framework_home_labels(self, change: Dict[str, Any]) -> None:
         """Update framework home widget labels when framework changes."""
         try:
             fw_name = self.get_selected_framework_name().upper()
             framework_home_widget = self.widgets.get("framework_home")
-            
+
             if framework_home_widget and len(framework_home_widget.children) >= 2:
                 checkbox = framework_home_widget.children[0]
                 path_input = framework_home_widget.children[1]
-                
+
                 # Update checkbox description
                 checkbox.update_label(f"Use custom {fw_name}_HOME")
 
         except Exception as e:
             print(e)
-            
+
     # =========================================================================
     # GUI Assembly
     # =========================================================================
@@ -855,14 +855,14 @@ class GUIMain(GUIEnvSetup):
             ),
         )
         self.row2.add_class("sub-container")
-        
+
 
 
         # self.row3:VBox= VBox([
         #     self.widgets["framework_gui"],
         # ])
         # self.row3.add_class("sub-container")
-        
+
 
         self.row3:VBox = VBox([
             self._create_header(title="Performance Metric"),
@@ -881,12 +881,12 @@ class GUIMain(GUIEnvSetup):
         if (el) el.scrollTop = el.scrollHeight;
         </script>
         """
-        
+
         self.style_widget = widgets.HTML(value=html_header_content)
 
         main_container : VBox = VBox(
-            [self.style_widget, self.row1, self.row2, 
-            #  self.row3, 
+            [self.style_widget, self.row1, self.row2,
+            #  self.row3,
              self.row3, self.widgets["output_area"]],
             layout=widgets.Layout(
                 display="flex",
@@ -947,7 +947,7 @@ class GUIMain(GUIEnvSetup):
         )
         wdg.add_class("sub-container")
         return wdg
-        
+
 
     # =========================================================================
     # Value Getters
@@ -1048,7 +1048,7 @@ class GUIMain(GUIEnvSetup):
     def get_selected_pid_dir(self) -> str:
         """Get the selected PID directory."""
         return f"{self.get_selected_config_destination()}/pid"
-    
+
     def _is_custom_framework_home_enabled(self) -> bool:
         """Check if custom framework home is enabled."""
         framework_home_widget = self.widgets.get("framework_home")
@@ -1069,7 +1069,7 @@ class GUIMain(GUIEnvSetup):
                 "Framework is not set. Either provide a custom path or set the "
                 f"'{self.get_selected_framework_name().upper()}_HOME' environment variable"
             )
-        
+
     # =========================================================================
     # Visualization Helpers
     # =========================================================================
@@ -1111,7 +1111,7 @@ class GUIMain(GUIEnvSetup):
     #     self.widgets["load_button"].disabled = True
     #     self.widgets["load_button"].description = "Processing..."
     #     self.widgets["load_button"].button_style = "warning"
-    
+
     # =========================================================================
     # Utility Methods
     # =========================================================================

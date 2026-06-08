@@ -194,7 +194,7 @@ class GUIEnvSetup:
 
     def _update_flink_conf_file(self) -> None:
         """Update the Flink configuration file (flink-conf.yaml)."""
-        
+
         conf_path = self.get_selected_config_destination()
         conf_files = [ "flink-conf.yaml", "masters", "meta.conf", "config.yaml" ]
 
@@ -250,7 +250,7 @@ class GUIEnvSetup:
         if not flink_home:
             logger.error("Error: FLINK_HOME environment variable is not set.", file=sys.stderr)
             return False
-            
+
         flink_lib_dir = os.path.join(flink_home, 'lib')
         if not os.path.exists(flink_lib_dir):
             logger.error(f"Error: Flink lib directory does not exist at: {flink_lib_dir}", file=sys.stderr)
@@ -261,12 +261,12 @@ class GUIEnvSetup:
         if not os.path.exists(pyflink_opt_dir):
             logger.error(f"Error: PyFlink 'opt' directory not found at: {pyflink_opt_dir}", file=sys.stderr)
             return False
-            
+
         jar_files = [f for f in os.listdir(pyflink_opt_dir) if f.startswith('flink-python') and f.endswith('.jar')]
         if not jar_files:
             logger.error(" Error: Could not find any flink-python*.jar in pyflink/opt folder.", file=sys.stderr)
             return False
-            
+
         jar_name = jar_files[0]
         source_jar_path = os.path.join(pyflink_opt_dir, jar_name)
         target_jar_path = os.path.join(flink_lib_dir, jar_name)
@@ -280,7 +280,7 @@ class GUIEnvSetup:
             except Exception as e:
                 print(f"❌ Error: Failed to copy jar: {e}", file=sys.stderr)
                 return False
-                
+
         return True
 
 
@@ -310,7 +310,7 @@ class GUIEnvSetup:
             "log_dir": self.get_selected_log_dir(),
             "fw_mapping": FRAMEWORK_REGISTRY,
         })
-    
+
     def _update_environment(self,fw_name):
         if fw_name.upper() == "SPARK":
             self._update_spark_environment()

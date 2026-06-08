@@ -49,10 +49,10 @@ def submit_pyflink(line, cell):
     if not flink_root:
         raise EnvironmentError("FLINK_ROOT_DIR environment variable not set.")
     flink = f"{flink_root}/bin/flink"
-    
+
     flink_command = [flink, "run"]
     flink_command.extend([f"--jobmanager", args.jobmanager])
-    
+
     if args.pyarch:
         flink_command.extend(["-pyarch", args.pyarch])
     if args.pyexec:
@@ -67,27 +67,27 @@ def submit_pyflink(line, cell):
         flink_command.extend(["--pyFiles", args.pyFiles])
     if args.target:
         flink_command.extend(["--target", args.target])
-        
+
     flink_command.extend(args.additional_args)
-    
+
     flink_command.append(f"-py")
     flink_command.append(temp_file_path)
 
     # Execute the command
-    command_str = " ".join(flink_command)    
+    command_str = " ".join(flink_command)
     logger.info(f"Executing: {command_str}")
-    
+
     # Execute the command and capture stdout and stderr
     process = subprocess.Popen(command_str, env=os.environ, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     output, error = process.communicate()
     logger.info(output.decode())
     logger.Error(error.decode())
-    
+
     #result = subprocess.run(command_str, capture_output=True, text=True, shell=True)
     #logger.info(result.stdout)
     #logger.error(result.stderr)
 
-    
+
 
     # Clean up the temporary file
     os.remove(temp_file_path)

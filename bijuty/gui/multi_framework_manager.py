@@ -36,7 +36,7 @@ class MultiFrameworkManager:
 
     def display(self) -> widgets.HBox:
         """Build the GUI and immediately display it."""
-        
+
         self.build_widget()
         display(self._root_layout)
         return self._root_layout
