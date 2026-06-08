@@ -20,7 +20,7 @@ except ImportError:
 # logging.getLogger('Comm').addFilter(IgnoreNoSuchComm())
 
 # Import GUI components for easy access
-from .gui.cluster_configurator import ClusterConfigurator
+from .gui.main import GUIMain
 from .gui.config import (
     FRAMEWORK_REGISTRY,
     FrameworkConfig,
@@ -29,21 +29,17 @@ from .gui.config import (
 )
 from .gui.html import HTMLGenerator
 from .gui.widgets import WidgetFactory
-from .multi_framework_manager import MultiFrameworkManager
-
-# Backwards-compatible alias
-GUIUtils = ClusterConfigurator
+from .gui.multi_framework_manager import MultiFrameworkManager
 
 __all__ = [
-    "ClusterConfigurator",
-    "GUIUtils",
+    "GUIMain",
     "FRAMEWORK_REGISTRY",
     "HTMLGenerator",
     "WidgetFactory",
     "FrameworkConfig",
     "ResourceAllocation",
     "COLOR_SCHEME",
-    "MultiFrameworkManager",
+    "MultiFrameworkManager"
 ]
 
 # Only auto-display when running inside an IPython kernel

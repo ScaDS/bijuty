@@ -8,12 +8,7 @@ setup for big data clusters using ipywidgets.
 from __future__ import annotations
 
 import os
-import re
-import shlex
 import socket
-import sys
-import threading
-import time
 import traceback
 from typing import Any, Dict, List, Optional
 import io
@@ -24,6 +19,7 @@ from IPython.display import clear_output, display
 
 from ..big_data_manager import BigDataManager
 from .config import FRAMEWORK_REGISTRY
+from .env_setup import GUIEnvSetup
 from .html import HTMLGenerator
 from .widgets import (
     WidgetFactory,
@@ -35,17 +31,14 @@ from .widgets import (
 from ..slurm_utils import SlurmManager
 from ..monitoring.process import ProcessMonitor
 from ..monitoring.spark import SparkMetricMonitor
-from ..utils import run_bash_command, logger, get_file_content
-
-
-# logger = SimpleLogger()
-
+from ..monitoring.flink import FlinkMetricMonitor
+from ..utils import logger, get_file_content
 
 # =============================================================================
 # Main GUI Class
 # =============================================================================
 
-class ClusterConfigurator:
+class GUIMain(GUIEnvSetup):
     """
     GUI utilities for configuring and managing big data frameworks.
 
@@ -70,7 +63,6 @@ class ClusterConfigurator:
         self.slurm_info = SlurmManager()
         self.bdm = BigDataManager()
         self.process_monitor = ProcessMonitor(slurm_info=self.slurm_info)
-        self.spark_monitor = SparkMetricMonitor()
 
         # Widget containers
         self.widgets: Dict[str, Any] = {}
@@ -89,6 +81,31 @@ class ClusterConfigurator:
         self._debug_set_slurm_true = False
         if self._debug_set_slurm_true:
             self.slurm_info.in_slurm_job = True
+
+    def _get_spark_monitor(self) -> SparkMetricMonitor:
+        if not hasattr(self, "_spark_monitor"):
+            self._spark_monitor = SparkMetricMonitor()
+        return self._spark_monitor
+
+    def _get_flink_monitor(self) -> FlinkMetricMonitor:
+        if not hasattr(self, "_flink_monitor"):
+            self._flink_monitor = FlinkMetricMonitor()
+        return self._flink_monitor
+
+    def _get_framework_monitor(self):
+        fw_name = self.get_selected_framework_name()
+        if fw_name and fw_name.lower() == "flink":
+            return self._get_flink_monitor()
+        return self._get_spark_monitor()
+
+    def _update_metric_dashboard_widget(self) -> None:
+        md = self.widgets.get("metric_dashboard")
+        if md is not None:
+            fw_monitor = self._get_framework_monitor()
+            children = list(md.children)
+            if len(children) >= 4:
+                children[3] = fw_monitor.get_ui()
+                md.children = tuple(children)
 
     # =========================================================================
     # Public API
@@ -134,16 +151,16 @@ class ClusterConfigurator:
         if wrap_function_stdout:
             if func is None:
                 raise ValueError("func must be provided when wrap_function_stdout=True")
-            
+
             stdout_capture = io.StringIO()
             stderr_capture = io.StringIO()
-            
+
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 result = func()
-            
+
             stdout_output = stdout_capture.getvalue()
             stderr_output = stderr_capture.getvalue()
-            
+
             with self.widgets["output_area"]:
                 if stdout_output:
                     logger.info(stdout_output)
@@ -159,10 +176,7 @@ class ClusterConfigurator:
                 else:
                     logger.info(message)
 
-    def _set_environment(
-            self,
-            # b: widgets.Button
-            ) -> None:
+    def _set_environment(self) -> None:
         """Set up the environment when the load button is clicked."""
         self._log("Load button clicked!", "debug")
 
@@ -172,20 +186,20 @@ class ClusterConfigurator:
         self._log(f"Setting environment for {self.get_selected_framework_name()}...")
 
         try:
-            self._execute_framework_setup()
-            self._update_spark_environment()
+            self._initialize_framework_config()
+            self._update_environment(fw_name=self.get_selected_framework_name())
             self._initialize_big_data_manager()
             self._reinitalize_dashboard()
         except Exception as e:
             self._handle_setup_error(e)
         # finally:
         #     self.widgets["load_button"].disabled = False
-            
-    def _reinitalize_dashboard(self) ->None:
+
+    def _reinitalize_dashboard(self) -> None:
         self.process_monitor.set_process_names(self.bdm.get_fw_cluster_processes(all_procs=True))
-        self.spark_monitor.set_monitor(user_input=self.bdm._user_inputs)
-        # self.spark_monitor=SparkMetricMonitor(user_input=self.bdm._user_inputs)
-        # self.widgets["metric_dashboard"] = self._create_metric_dashboard()
+        fw_monitor = self._get_framework_monitor()
+        fw_monitor.set_monitor(user_input=self.bdm._user_inputs)
+        self._update_metric_dashboard_widget()
 
     # =========================================================================
     # Properties
@@ -259,7 +273,7 @@ class ClusterConfigurator:
                 url=url,
             )
             btn_widget = WidgetFactory.update_widget_state(btn_widget,disable=True)
-            
+
             return btn_widget
         if web_ui_links:
             for port, title in web_ui_links:
@@ -287,13 +301,13 @@ class ClusterConfigurator:
             """
             instructions_widget = widgets.HTML(value=instructions_html)
             instructions_widget = WidgetFactory.update_widget_state(instructions_widget,disable=True)
-            
+
         return VBox(
             [
                 # self._create_header("Framework Web Interface"),
                 widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
                 instructions_widget
-                
+
             ],layout=widgets.Layout(width="50%", padding="8px")
         )
 
@@ -314,19 +328,45 @@ class ClusterConfigurator:
         master_port = self.get_selected_master_port() if running else "-"
         workers = self.get_selected_workers() if running else "-"
         workers_str = ", ".join(workers) if (workers and running) else "-"
-        info_widget.value = (
-            f"<div style='font-size:12px; color:#555; margin-top:4px;display:flex; flex-direction:column;width:100%; justify-content:center; align-items:center;'>"
-            # f"<div style='width:80%; justify-content:left; align-items:center;'>"
-            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center'><b>Cluster Status:&nbsp;</b><span style='width:8px;height:8px;border-radius:50%;background:{status_color};margin-right:4px;'></span> {status_text}</div>"
-            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center'><b>Master:&nbsp;</b> {master}&nbsp;|&nbsp; <b>Port:&nbsp;</b>{master_port}</div>"
-            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center'> <b>Workers:&nbsp;</b> {workers_str}</div>"
-            f"<div style='width:100%; justify-content:center; display:flex; flex-direction:row; align-items:center;font-size:11px; color:#777; margin-top:2px;'>"
-            f"Use the master node name while initializing Spark context.<br>"
-            f"eg. spark://{master}:{master_port}"
-            f"</div>"
-            # f"</div>"
-            f"</div>"
-        )
+        framework = self.get_selected_framework_name().lower()
+        if framework in ["spark", "flink"]:
+            # Base template for shared cluster statistics
+            html_content = (
+                f"<div style='font-size:12px; color:#555; margin-top:4px; display:flex; flex-direction:column; width:100%; align-items:center;'>"
+                f"  <div style='display:flex; justify-content:center; align-items:center; margin-bottom:2px;'><b>Cluster Status:&nbsp;</b><span style='width:8px; height:8px; border-radius:50%; background:{status_color}; margin-right:4px;'></span> {status_text}</div>"
+                f"  <div style='display:flex; justify-content:center; align-items:center; margin-bottom:2px;'><b>Master:&nbsp;</b> {master}&nbsp;|&nbsp;<b>Port:&nbsp;</b>{master_port}</div>"
+                f"  <div style='display:flex; justify-content:center; align-items:center; margin-bottom:4px;'><b>Workers:&nbsp;</b> {workers_str}</div>"
+            )
+
+            if framework == "spark":
+                html_content += (
+                    f"  <div style='font-size:11px; color:#777; margin-top:4px; text-align:center;'>"
+                    f"    Use the master node name while initializing Spark context.<br>"
+                    f"    <b>eg. spark://{master}:{master_port}</b>"
+                    f"  </div>"
+                )
+            elif framework == "flink":
+                # Clean, non-indented Python block formatting
+                py_code = (
+                    "from pyflink.common.configuration import Configuration\n\n"
+                    "config = Configuration()\n"
+                    'config.set_string("execution.target", "remote")\n'
+                    f'config.set_string("jobmanager.rpc.address", "{master}")\n'
+                    f'config.set_string("jobmanager.rpc.port", "{master_port}")\n'
+                    f'config.set_string("rest.address", "{master}")\n'
+                    'config.set_string("rest.port", "8081")'
+                )
+                html_content += (
+                    f"  <div style='font-size:11px; color:#777; margin-top:6px; display:flex; flex-direction:column; width:90%; align-items:flex-start;'>"
+                    f"    <span style='margin-bottom:4px; align-self:center; text-align:center;'>Set this configuration in your notebook before running the job:</span>"
+                    f"    <pre style='background:#f4f4f4; padding:8px; border-radius:4px; border:1px solid #ddd; font-family:monospace; width:100%; box-sizing:border-box; margin:0; text-align:left;'>{py_code}</pre>"
+                    f"  </div>"
+                )
+
+            html_content += "</div>"
+            info_widget.value = html_content
+
+
 
     def _create_header(self, title: str) -> widgets.HTML:
         """Create the GUI header widget."""
@@ -335,7 +375,7 @@ class ClusterConfigurator:
     def _create_framework_widget(self) -> widgets.Dropdown:
         """Create the framework selection widget."""
         framework_list = list(FRAMEWORK_REGISTRY.keys())
-        default_value = self._default_framework if self._default_framework in framework_list else framework_list[0]
+        default_value = self._default_framework if self._default_framework in framework_list else framework_list[1]
         return WidgetFactory.create_dropdown(
             options=framework_list,
             value=default_value,
@@ -458,7 +498,7 @@ class ClusterConfigurator:
             default_cpu_worker = FRAMEWORK_REGISTRY[fw_name].default_resources.get("cpu_worker", 1)
         except:
             default_cpu_worker = 1
-        
+
         return WidgetFactory.create_slider(
             value=1,
             min_val=1,
@@ -485,7 +525,7 @@ class ClusterConfigurator:
             step=1,
             description="Cores / Compute Units:",
             tooltip="""The number of CPU cores assigned to each individual compute unit from the total pool set in "Core Pool per Node." This determines how many parallel compute units can be initialized on each node.\n- Spark: SPARK_EXECUTOR_CORES\n- Flink: taskmanager.numberOfTaskSlots""",
-            
+
         )
 
     def _create_driver_memory_widget(self) -> widgets.IntSlider:
@@ -557,16 +597,16 @@ class ClusterConfigurator:
         button.disabled = not self.is_config_set
         button.on_click(self._on_stop_cluster_clicked)
         return button
-    
+
     def _create_metric_dashboard(self) -> widgets.Box:
-        """Create the metric dashboard widget."""        
+        """Create the metric dashboard widget."""
+        fw_monitor = self._get_framework_monitor()
         return widgets.VBox(
             [
-
                 widgets.HTML("<div>Process Metrics</div>"),
                 self.process_monitor.get_ui(),
                 widgets.HTML("<div>Framework Metrics</div>"),
-                self.spark_monitor.get_ui()
+                fw_monitor.get_ui(),
             ]
         )
 
@@ -660,8 +700,10 @@ class ClusterConfigurator:
         """Handle parameter changes."""
         self.is_config_set = False
         self._update_framework_home_labels(change)
-        fw_logo_wdg = self.widgets["logo"] 
+        fw_logo_wdg = self.widgets["logo"]
         fw_logo_wdg.value = self._create_logo_widget().value
+        if change.get("owner") is self.widgets.get("framework"):
+            self._update_metric_dashboard_widget()
 
     def _update_worker_cpu_range(self, change: Dict[str, Any]) -> None:
         """Update worker CPU range based on driver CPU."""
@@ -698,7 +740,7 @@ class ClusterConfigurator:
             self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
             self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
         self._update_cluster_info()
-        
+
     def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle stop cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
@@ -740,23 +782,23 @@ class ClusterConfigurator:
             self.widgets["framework_gui"].disable()
         else:
             self.widgets["framework_gui"].enable()
-    
+
     def _update_framework_home_labels(self, change: Dict[str, Any]) -> None:
         """Update framework home widget labels when framework changes."""
         try:
             fw_name = self.get_selected_framework_name().upper()
             framework_home_widget = self.widgets.get("framework_home")
-            
+
             if framework_home_widget and len(framework_home_widget.children) >= 2:
                 checkbox = framework_home_widget.children[0]
                 path_input = framework_home_widget.children[1]
-                
+
                 # Update checkbox description
                 checkbox.update_label(f"Use custom {fw_name}_HOME")
 
         except Exception as e:
             print(e)
-            
+
     # =========================================================================
     # GUI Assembly
     # =========================================================================
@@ -813,14 +855,14 @@ class ClusterConfigurator:
             ),
         )
         self.row2.add_class("sub-container")
-        
+
 
 
         # self.row3:VBox= VBox([
         #     self.widgets["framework_gui"],
         # ])
         # self.row3.add_class("sub-container")
-        
+
 
         self.row3:VBox = VBox([
             self._create_header(title="Performance Metric"),
@@ -839,12 +881,12 @@ class ClusterConfigurator:
         if (el) el.scrollTop = el.scrollHeight;
         </script>
         """
-        
+
         self.style_widget = widgets.HTML(value=html_header_content)
 
         main_container : VBox = VBox(
-            [self.style_widget, self.row1, self.row2, 
-            #  self.row3, 
+            [self.style_widget, self.row1, self.row2,
+            #  self.row3,
              self.row3, self.widgets["output_area"]],
             layout=widgets.Layout(
                 display="flex",
@@ -905,7 +947,7 @@ class ClusterConfigurator:
         )
         wdg.add_class("sub-container")
         return wdg
-        
+
 
     # =========================================================================
     # Value Getters
@@ -924,7 +966,10 @@ class ClusterConfigurator:
     def get_selected_master_port(self) -> str:
         """Get the selected master port."""
         if self.widgets["randomize_port"].value:
-            return str(self._find_first_available_port(start_port=7077))
+            if self.get_selected_framework_name().lower() == "spark":
+                return str(self._find_first_available_port(start_port=7077))
+            elif self.get_selected_framework_name().lower() == "flink":
+                return str(self._find_first_available_port(start_port=6123))
         return str(self.selected_framework.default_master_port)
 
     def get_selected_master_host(self) -> str:
@@ -1003,7 +1048,7 @@ class ClusterConfigurator:
     def get_selected_pid_dir(self) -> str:
         """Get the selected PID directory."""
         return f"{self.get_selected_config_destination()}/pid"
-    
+
     def _is_custom_framework_home_enabled(self) -> bool:
         """Check if custom framework home is enabled."""
         framework_home_widget = self.widgets.get("framework_home")
@@ -1024,12 +1069,6 @@ class ClusterConfigurator:
                 "Framework is not set. Either provide a custom path or set the "
                 f"'{self.get_selected_framework_name().upper()}_HOME' environment variable"
             )
-        
-    def _set_framework_home(self) -> None:
-        os.environ[f"{self.get_selected_framework_name()}_HOME"] = self.get_selected_framework_home()
-    
-    def _create_conf_dest_dir(self) -> None:
-        os.makedirs(os.path.dirname(self.get_selected_config_destination()),exist_ok=True)
 
     # =========================================================================
     # Visualization Helpers
@@ -1050,30 +1089,13 @@ class ClusterConfigurator:
         node_mem_capacity = self.slurm_info.get_memory_per_node()
         node_cpu_capacity = self.slurm_info.get_cpus_per_node()
 
-        # Calculate heights
-        # master_mem_height = max((drv_mem / node_mem_capacity) * 100,25)
-        # worker_mem_height = max((wrk_mem / node_mem_capacity) * 100,25)
-        # executor_mem_height = max((exe_mem / wrk_mem) * 100, 25)# (exe_mem / wrk_mem) * 100 if wrk_mem > 0 else 0
-
-        # master_cpu_height = max((drv_cpu / node_cpu_capacity) * 100, 25)
-        # worker_cpu_height = max((wrk_cpu / node_cpu_capacity) * 100, 25)
-        # executor_cpu_height = max((exe_cpu / wrk_cpu) * 100, 25) if wrk_cpu > 0 else 0
-
         return {
-            # "total_mem": "100%",
             "master_node": self.get_selected_master_host(),
             "worker_node": self.get_selected_workers(),
-            # "drv_mem_height": f"{master_mem_height:.1f}%",
-            # "wrk_mem_height": f"{worker_mem_height:.1f}%",
-            # "exe_mem_height": f"{executor_mem_height:.1f}%",
             "total_mem_val": f"{int(node_mem_capacity)}",
             "drv_mem_val": f"{int(drv_mem)}",
             "wrk_mem_val": f"{int(wrk_mem)}",
             "exe_mem_val": f"{int(exe_mem)}",
-            # "total_cpu_height": "100%",
-            # "drv_cpu_height": f"{master_cpu_height:.1f}%",
-            # "wrk_cpu_height": f"{worker_cpu_height:.1f}%",
-            # "exe_cpu_height": f"{executor_cpu_height:.1f}%",
             "total_cpu_val": f"{int(node_cpu_capacity)}",
             "drv_cpu_val": f"{int(drv_cpu)}",
             "wrk_cpu_val": f"{int(wrk_cpu)}",
@@ -1089,177 +1111,6 @@ class ClusterConfigurator:
     #     self.widgets["load_button"].disabled = True
     #     self.widgets["load_button"].description = "Processing..."
     #     self.widgets["load_button"].button_style = "warning"
-    
-    def _set_fw_config_template(self) -> None:
-        fw_name = self.get_selected_framework_name()
-        if self.is_default_config_template():
-            fw_conf_template = FRAMEWORK_REGISTRY[fw_name.upper()].default_template
-        else:
-            fw_conf_template = self.get_selected_config_template()
-        os.environ[f"{fw_name}_CONF_TEMPLATE"] = fw_conf_template
-    
-    def _execute_framework_setup(self) -> None:
-        """Execute the bash command to set up the framework."""
-        self._set_framework_home()
-        self._set_fw_config_template()
-        self._create_conf_dest_dir()
-
-        fw_name = shlex.quote(self.get_selected_framework_name().lower())
-        template = shlex.quote(self.get_selected_config_template())
-        dest = shlex.quote(
-            os.path.dirname(self.get_selected_config_destination())
-        )
-        
-        script_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),"..")
-        
-        bash_command = (
-            f"cd {script_dir} && source ./framework-configure.sh "
-            f"--framework {fw_name} "
-            f"--template {template} "
-            f"--destination {dest} "
-            f"&& env | grep {fw_name} || true"
-        )
-
-        start_time = time.time()
-        self._log(f"Initializing configuration at: {dest}")
-        self._log(bash_command,"debug")
-        res = run_bash_command(bash_command, shell=True, timeout=6000)
-        elapsed = time.time() - start_time
-        self._log(f"Time elapsed for config init: {elapsed:.2f} seconds","debug")
-
-        if res.returncode != 0:
-            # self._set_load_button_failed()
-            self._log(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}","error")
-            raise RuntimeError(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}")
-
-        # Update environment variables
-        for line in res.stdout.splitlines():
-            if "=" in line:
-                key, value = line.strip().split("=", 1)
-                os.environ[str(key).strip()] = str(value).strip()
-
-    def _update_spark_environment(self) -> None:
-        """Update Spark environment configuration."""
-        if self.get_selected_framework_name() != "SPARK":
-            return
-
-        try:
-            env_updates = self._build_spark_env_updates()
-            self._update_env_file(env_updates)
-            self._update_worker_file()
-
-            # self._set_load_button_success()
-            self._log(f"Environment updated for {self.get_selected_framework_name()}!","info")
-            self.is_config_set = True
-            self._toggle_cluster_buttons(start_disabled=False)
-
-        except Exception as e:
-            self._handle_setup_error(e)
-
-    def _build_spark_env_updates(self) -> Dict[str, str]:
-        """Build Spark environment variable updates."""
-        return {
-            "SPARK_MASTER_HOST": self.get_selected_master_host(),
-            "SPARK_WORKER_CORES": str(self.get_selected_worker_cpu()),
-            "SPARK_WORKER_MEMORY": self.get_selected_worker_memory(),
-            "SPARK_EXECUTOR_CORES": str(self.get_selected_executor_cpu()),
-            "SPARK_EXECUTOR_MEMORY": self.get_selected_executor_memory(),
-            "SPARK_DRIVER_MEMORY": self.get_selected_driver_memory(),
-            "SPARK_LOCAL_DIRS": self.get_selected_local_dirs(),
-            "SPARK_WORKER_DIR": self.get_selected_worker_dir(),
-            "SPARK_CONF_DIR": self.get_selected_config_destination(),
-            "SPARK_LOG_DIR": self.get_selected_log_dir(),
-            "SPARK_PID_DIR": self.get_selected_pid_dir(),
-            "SPARK_MASTER_PORT": self.get_selected_master_port(),
-            #"PYSPARK_PYTHON": os.environ.get("PYSPARK_PYTHON", sys.executable),
-            "LD_LIBRARY_PATH":os.environ.get("LD_LIBRARY_PATH",""), # important for slurm modules
-        }
-
-    def _update_env_file(self, env_updates: Dict[str, str]) -> None:
-        """Update the Spark environment file."""
-        
-        # Setting spark env file
-        file_path = os.path.join(
-            self.get_selected_config_destination(), "spark-env.sh"
-        )
-
-        with open(file_path, "r") as f:
-            content = f.read()
-
-        for var_name, new_value in env_updates.items():
-            escaped_var = re.escape(var_name)
-            replacement = f'export {var_name}="{new_value}"'
-
-            active_pattern = rf"^\s*export\s+\b{escaped_var}\b.*$"
-            comment_pattern = rf"^[\s#\-]+(?:export\s+)?\b{escaped_var}\b.*$"
-
-            if re.search(active_pattern, content, flags=re.MULTILINE):
-                content = re.sub(active_pattern, replacement, content, flags=re.MULTILINE)
-            elif re.search(comment_pattern, content, flags=re.MULTILINE):
-                content = re.sub(comment_pattern, replacement, content, count=1, flags=re.MULTILINE)
-            else:
-                if content and not content.endswith("\n"):
-                    content += "\n"
-                content += f"{replacement}\n"
-
-            os.environ[str(var_name).strip()] = str(new_value).strip()
-
-        with open(file_path, "w") as f:
-            f.write(content)
-        
-        # Setting log4j file
-        file_path = os.path.join(
-            self.get_selected_config_destination(), "log4j2.properties"
-        )
-        with open(file_path, "r") as f:
-            content = f.read().replace("FRAMEWORK_LOG_DIR", self.get_selected_log_dir())
-        with open(file_path, "w") as f:
-            f.write(content)
-
-    def _update_worker_file(self) -> None:
-        """Update the Spark worker file."""
-        worker_file_path = os.path.join(
-            self.get_selected_config_destination(),
-            FRAMEWORK_REGISTRY[self.get_selected_framework_name()].worker_file,
-        )
-        with open(worker_file_path, "w") as f:
-            for node in self.get_selected_workers():
-                f.write(f"{node}\n")
-
-    def _handle_setup_error(self, error: Exception) -> None:
-        """Handle setup errors."""
-        self._log(f"FATAL ERROR: {str(error)}")
-        tb = traceback.format_exc()
-        self._log(tb, msg_type="error")
-        # self._set_load_button_failed()
-        self.is_config_set = False
-        self._toggle_cluster_buttons(start_disabled=False,stop_disabled=True)
-
-    # def _set_load_button_success(self) -> None:
-    #     """Set load button to success state."""
-    #     button = self.widgets["load_button"]
-    #     button.button_style = "success"
-    #     button.description = "Success!"
-    #     button.disabled = False
-
-    # def _set_load_button_failed(self) -> None:
-    #     """Set load button to failed state."""
-    #     button = self.widgets["load_button"]
-    #     button.button_style = "danger"
-    #     button.description = "Failed"
-
-    def _initialize_big_data_manager(self) -> None:
-        """Initialize the BigDataManager with user input."""
-        self.bdm.initialize_user_input({
-            "fw_name": self.get_selected_framework_name(),
-            "fw_home": self.get_selected_framework_home(),
-            "master": self.get_selected_master_host(),
-            "workers": self.get_selected_workers(),
-            "master_port": self.get_selected_master_port(),
-            "conf_dir": self.get_selected_config_destination(),
-            "log_dir": self.get_selected_log_dir(),
-            "fw_mapping": FRAMEWORK_REGISTRY,
-        })
 
     # =========================================================================
     # Utility Methods

@@ -159,7 +159,7 @@ class SparkMetricsHistory:
         self.total_gc_time_ms.append(metrics.total_gc_time_ms)
         self.total_duration_ms.append(metrics.total_duration_ms)
         self.jvm_heap_used_mb.append(metrics.jvm_heap_used_mb)
-        
+
 
         self.timestamp.append(metrics.timestamp)
 
@@ -319,7 +319,7 @@ class SparkMetricMonitor(MetricDashboard):
         enabled_metrics: Optional[List[str]] = None,
     ) -> None:
         self._user_input = user_input
-        
+
         if base_url:
             self._base_url = base_url
         else:
@@ -327,9 +327,9 @@ class SparkMetricMonitor(MetricDashboard):
                 self._base_url = f"http://{user_input.master}:4040"
             else:
                 self._base_url = None
-        
+
         self.enabled_metrics = enabled_metrics or ENABLED_METRICS
-        
+
         self.collector = SparkMetricCollector(base_url=self._base_url)
         # self._extra = [
         #     WidgetFactory.create_styled_button_redirect(
@@ -345,7 +345,7 @@ class SparkMetricMonitor(MetricDashboard):
             refresh_step=0.5,
             # extra_header_widgets=self._extra,
         )
-    
+
     def set_monitor(self, user_input: Dict = None, base_url=None):
         if base_url:
             self._base_url = base_url
@@ -354,10 +354,10 @@ class SparkMetricMonitor(MetricDashboard):
                 self._base_url = f"http://{user_input.master}:4040"
             else:
                 raise Exception("Please provide base url")
-        
+
         self.collector = SparkMetricCollector(base_url=self._base_url)
 
-        
+
     def _render_metrics(self, metrics: Dict[str, Dict[str, Any]]) -> None:
         if not metrics:
             return

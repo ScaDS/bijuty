@@ -142,3 +142,24 @@
   width: fit-content;
   justify-content: center;
 }
+
+.tab-control-btn {
+  width: 25px !important;
+  height: 25px !important;
+  min-width: unset !important;
+  min-height: unset !important;
+  padding: 0px !important;
+}
+
+.tab-control-btn button {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0px !important;
+}
+
+.tab-controls {
+  width: 40px !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  padding: 0px !important;
+}

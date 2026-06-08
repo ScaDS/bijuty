@@ -80,7 +80,7 @@ class SimpleLogger:
             return
 
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        
+
         # Use the helper property for the string label
         level_label = asked_level.label
 
@@ -105,7 +105,7 @@ class SimpleLogger:
 
 # Global logger instance
 logger = SimpleLogger()
-
+logger.set_log_level(LogLevel.DEBUG)
 
 # =============================================================================
 # Environment Functions
@@ -231,7 +231,7 @@ def get_file_content(file_path):
         return "Error: The file was not found."
     except Exception as e:
         return f"An error occurred: {e}"
-    
+
 def debug_write_to_file(content="here", file_path="./tmp.txt"):
     with open(file_path, "a") as f:
         f.write(content)

@@ -131,11 +131,20 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
     ),
     "FLINK": FrameworkConfig(
         name="FLINK",
-        proc_master="org.apache.flink.runtime.entrypoint.StandaloneSessionClusterEntrypoint",
-        proc_worker="org.apache.flink.runtime.taskexecutor.TaskManagerRunner",
+        proc_master={
+            "title": "Master",
+            "pattern": "org.apache.flink.runtime.entrypoint.StandaloneSessionClusterEntrypoint"
+        },
+        proc_worker={
+            "title": "Worker",
+            "pattern": "org.apache.flink.runtime.taskexecutor.TaskManagerRunner"
+        },
+        proc_other=[
+            {"title": "TaskManager", "pattern": "org.apache.flink.runtime.taskexecutor.TaskManagerRunner"},
+        ],
         logo_url="https://flink.apache.org/img/logo/png/200/flink_squirrel_200_color.png",
         worker_file="workers",
-        default_master_port=8081,
+        default_master_port=6123,
         default_resources={
             "mem_driver": 1000,
             "mem_worker": 1000,

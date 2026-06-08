@@ -224,7 +224,7 @@ class ProcessMetricCollector:
                 io_read_mb=io_counters.read_bytes / BYTES_TO_MB,
                 io_write_mb=io_counters.write_bytes / BYTES_TO_MB,
                 timestamp=datetime.now().strftime("%H:%M:%S")
-                
+
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess) as e:
             print("Failed to extract metrics from process %s: %s", proc.pid, e)

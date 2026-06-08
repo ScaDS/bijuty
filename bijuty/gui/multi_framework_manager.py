@@ -12,26 +12,21 @@ from typing import Any
 import ipywidgets as widgets
 from IPython.display import display
 
-from .gui.cluster_configurator import ClusterConfigurator
-from .gui.config import FRAMEWORK_REGISTRY
+from .main import GUIMain
+from .config import FRAMEWORK_REGISTRY
 
 
 class MultiFrameworkManager:
     """Dynamic tabbed manager for big data framework GUIs.
 
-    Starts with a single tab. Clicking **+** appends a new ``GUIUtils`` tab,
+    Starts with a single tab. Clicking **+** appends a new ``GUIMain`` tab,
     and clicking **x** closes the currently-selected tab (at least one tab
     always remains).
-
-    Example::
-
-        manager = MultiFrameworkManager()
-        manager.display()
     """
 
     def __init__(self) -> None:
         """Initialize the multi-framework manager."""
-        self._gui_instances: list[GUIUtils] = []
+        self._gui_instances: list[GUIMain] = []
         self._tabs: widgets.Tab | None = None
         self._root_layout: widgets.HBox | None = None
 
@@ -40,25 +35,19 @@ class MultiFrameworkManager:
     # ------------------------------------------------------------------
 
     def display(self) -> widgets.HBox:
-        """Build the GUI and immediately display it.
+        """Build the GUI and immediately display it."""
 
-        Returns:
-            The root layout widget.
-        """
         self.build_widget()
         display(self._root_layout)
         return self._root_layout
 
     def build_widget(self) -> widgets.HBox:
-        """Build (or rebuild) the widget without displaying it.
+        """Build (or rebuild) the widget without displaying it."""
 
-        Returns:
-            The root ``HBox`` containing the tabs and controls.
-        """
         self._gui_instances.clear()
 
         # Create initial single tab
-        gui = ClusterConfigurator()
+        gui = GUIMain()
         gui.launch_gui_config(display_gui=False)
         self._gui_instances.append(gui)
 
@@ -72,28 +61,21 @@ class MultiFrameworkManager:
         add_btn = widgets.Button(
             description="+",
             tooltip="Add new cluster tab",
-            layout=widgets.Layout(width="20px", height="20px"),
             button_style="info",
         )
+        add_btn.add_class("tab-control-btn")
         add_btn.on_click(self._on_add_tab)
 
         close_btn = widgets.Button(
             description="x",
             tooltip="Close selected tab",
-            layout=widgets.Layout(width="20px", height="20px"),
             button_style="danger",
         )
+        close_btn.add_class("tab-control-btn")
         close_btn.on_click(self._on_close_tab)
 
-        controls = widgets.VBox(
-            [add_btn, close_btn],
-            layout=widgets.Layout(
-                width="20px",
-                justify_content="flex-start",
-                align_items="center",
-                padding="4px 0 0 0",
-            ),
-        )
+        controls = widgets.VBox([add_btn, close_btn])
+        controls.add_class("tab-controls")
 
         self._root_layout = widgets.HBox(
             [self._tabs, controls],
@@ -106,18 +88,8 @@ class MultiFrameworkManager:
         """Return the current number of tabs."""
         return len(self._gui_instances)
 
-    def get_gui(self, idx: int = 0) -> GUIUtils:
-        """Get the ``GUIUtils`` instance for a given tab index.
-
-        Args:
-            idx: Tab index (0-based).
-
-        Raises:
-            IndexError: If the tab index is out of range.
-
-        Returns:
-            The ``GUIUtils`` instance at the requested index.
-        """
+    def get_gui(self, idx: int = 0) -> GUIMain:
+        """Get the ``GUIMain`` instance for a given tab index."""
         return self._gui_instances[idx]
 
     # ------------------------------------------------------------------
@@ -138,7 +110,7 @@ class MultiFrameworkManager:
 
     def _on_add_tab(self, _button: widgets.Button) -> None:
         """Create a new GUI instance and append it as a new tab."""
-        new_gui = GUIUtils()
+        new_gui = GUIMain()
         new_gui.launch_gui_config(display_gui=False)
         self._gui_instances.append(new_gui)
 

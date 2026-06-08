@@ -34,7 +34,7 @@ jobmanager.rpc.address: FLINK_MASTER_HOSTNAME
 
 # The RPC port where the JobManager is reachable.
 
-jobmanager.rpc.port: 6123
+jobmanager.rpc.port: FLINK_MASTER_PORT
 
 # The host interface the JobManager will bind to. By default, this is
 # FLINK_MASTER_HOSTNAME, and will prevent the JobManager from communicating outside
@@ -192,7 +192,7 @@ jobmanager.execution.failover-strategy: region
 # The port to which the REST client connects to. If rest.bind-port has
 # not been specified, then the server will bind to this port as well.
 #
-#rest.port: 8081
+rest.port: 8081
 
 # The address to which the REST client will connect to
 #
