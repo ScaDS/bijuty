@@ -39,9 +39,9 @@ BiJuTy supports the following packages:
 
 | Package | Version |
 |---------|---------|
-| **Python** | 3.11 |
-| **Apache Spark** and **PySpark**| 3.5.0 |
-| **Apache Flink** | 1.14.1 |
+| **Python** | 3.12.3 |
+| **Apache Spark** and **PySpark**| 3.5.1 |
+| **Apache Flink** | 2.1.2 |
 
 Additional requirements:
 - A JupyterHub / Jupyter Notebook environment
