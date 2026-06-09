@@ -38,40 +38,76 @@ fi
 
 case "$ACTION" in
     start)
-        echo "Starting Spark Master..."
-        SPARK_CONF_DIR="${CONF_DIR}" "$SPARK_HOME/sbin/start-master.sh"
-        
-        # Give the master a moment to initialize before workers connect
-        sleep 2 
+        START_ALL_FAILED=0
 
-        echo "Starting $NUM_WORKERS Spark Worker(s)..."
-        
-        grep -v '^#' "$WORKERS_FILE" | grep -v '^[[:space:]]*$' | while read -r HOST; do
-            for ((i=1; i<=NUM_WORKERS_PER_HOST; i++)); do
-                echo "Starting worker #$i on $HOST..."
-                #SPARK_CONF_DIR="${CONF_DIR}" "${SPARK_HOME}/sbin/start-worker.sh" "spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}"
-                ssh "$HOST" "export SPARK_HOME=$SPARK_HOME; SPARK_CONF_DIR=${CONF_DIR} ${SPARK_HOME}/sbin/start-worker.sh spark://$SPARK_MASTER_HOST:$SPARK_MASTER_PORT" || true
+        if SPARK_CONF_DIR="${CONF_DIR}" "$SPARK_HOME/sbin/start-all.sh"; then
+            sleep 5s
+            # Verify master port is open if host/port are known
+            if [ -n "$SPARK_MASTER_HOST" ] && [ -n "$SPARK_MASTER_PORT" ]; then
+                if ! bash -c "exec 3<>/dev/tcp/${SPARK_MASTER_HOST}/${SPARK_MASTER_PORT}" >/dev/null 2>&1; then
+                    echo "Warning: Master does not appear to be listening on ${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}"
+                    START_ALL_FAILED=1
+                fi
+            fi
+        else
+            START_ALL_FAILED=1
+        fi
+
+        if [ "$START_ALL_FAILED" -eq 1 ]; then
+            echo "Falling back to manual master/worker start..."
+
+            # Clean up any partial starts before retrying
+            SPARK_CONF_DIR="${CONF_DIR}" "$SPARK_HOME/sbin/stop-all.sh" >/dev/null 2>&1 || true
+
+            echo "Starting Spark Master..."
+            SPARK_CONF_DIR="${CONF_DIR}" "$SPARK_HOME/sbin/start-master.sh"
+
+            # Give the master a moment to initialize before workers connect
+            sleep 2s
+
+            echo "Starting $NUM_WORKERS Spark Worker(s)..."
+
+            grep -v '^#' "$WORKERS_FILE" | grep -v '^[[:space:]]*$' | while read -r HOST; do
+                for ((i=1; i<=NUM_WORKERS_PER_HOST; i++)); do
+                    echo "Starting worker #$i on $HOST..."
+                    ssh "$HOST" "export SPARK_HOME=$SPARK_HOME; SPARK_CONF_DIR=${CONF_DIR} ${SPARK_HOME}/sbin/start-worker.sh spark://$SPARK_MASTER_HOST:$SPARK_MASTER_PORT" || true
+                done
             done
-        done
-        
-        #SPARK_CONF_DIR="${CONF_DIR}" "${SPARK_HOME}/sbin/start-all.sh"
-        
+        fi
+
         echo "Spark cluster started successfully."
         ;;
         
     stop)
+        STOP_ALL_FAILED=0
         
-        echo "Stopping Spark Worker(s)..."
-        grep -v '^#' "$WORKERS_FILE" | grep -v '^[[:space:]]*$' | while read -r HOST; do
-            for ((i=1; i<=NUM_WORKERS_PER_HOST; i++)); do
-                echo "Stopping #$i worker on $HOST..."
-                ssh "$HOST" "export SPARK_HOME=$SPARK_HOME; SPARK_CONF_DIR=${CONF_DIR} ${SPARK_HOME}/sbin/stop-worker.sh spark://$SPARK_MASTER_HOST:$SPARK_MASTER_PORT" || true
+        if SPARK_CONF_DIR="${CONF_DIR}" "$SPARK_HOME/sbin/stop-all.sh"; then
+            sleep 5s
+            # Verify master port is open if host/port are known
+            if [ -n "$SPARK_MASTER_HOST" ] && [ -n "$SPARK_MASTER_PORT" ]; then
+                if bash -c "exec 3<>/dev/tcp/${SPARK_MASTER_HOST}/${SPARK_MASTER_PORT}" >/dev/null 2>&1; then
+                    echo "Warning: Master still appear to be listening on ${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}"
+                    STOP_ALL_FAILED=1
+                fi
+            fi
+        else
+            STOP_ALL_FAILED=1
+        fi
+
+        if [ "$STOP_ALL_FAILED" -eq 1 ]; then
+            echo "Using fallback method to stop cluster."
+            echo "Stopping Spark Worker(s)..."
+            grep -v '^#' "$WORKERS_FILE" | grep -v '^[[:space:]]*$' | while read -r HOST; do
+                for ((i=1; i<=NUM_WORKERS_PER_HOST; i++)); do
+                    echo "Stopping #$i worker on $HOST..."
+                    ssh "$HOST" "export SPARK_HOME=$SPARK_HOME; SPARK_CONF_DIR=${CONF_DIR} ${SPARK_HOME}/sbin/stop-worker.sh spark://$SPARK_MASTER_HOST:$SPARK_MASTER_PORT" || true
+                done
             done
-        done
-        
-        echo "Stopping Spark Master..."
-        SPARK_CONF_DIR="${CONF_DIR}" "$SPARK_HOME/sbin/stop-master.sh" || true
-        
+            
+            echo "Stopping Spark Master..."
+            SPARK_CONF_DIR="${CONF_DIR}" "$SPARK_HOME/sbin/stop-master.sh" || true
+        fi
+
         echo "Spark cluster stopped successfully."
         ;;
         
