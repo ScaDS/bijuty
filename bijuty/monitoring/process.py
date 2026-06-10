@@ -24,6 +24,8 @@ from ..slurm_utils import SlurmManager
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+logger = logging.getLogger(__name__)
+
 # Constants
 BYTES_TO_MB = 1024 * 1024
 DEFAULT_HISTORY_SIZE = 40
@@ -198,9 +200,9 @@ class ProcessMetricCollector:
                 if pattern and pattern in cmdline:
                     return proc_i
         except (psutil.AccessDenied, psutil.NoSuchProcess) as e:
-            print("Could not access process %s info: %s", proc.pid, e)
+            logger.warning("Could not access process %s info: %s", proc.pid, e)
         except Exception as e:
-            print("Unexpected error accessing process %s: %s", proc.pid, e)
+            logger.error("Unexpected error accessing process %s: %s", proc.pid, e)
 
         return None
 
@@ -227,9 +229,9 @@ class ProcessMetricCollector:
 
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess) as e:
-            print("Failed to extract metrics from process %s: %s", proc.pid, e)
+            logger.warning("Failed to extract metrics from process %s: %s", proc.pid, e)
         except Exception as e:
-            print(
+            logger.error(
                 "Unexpected error extracting metrics from process %s: %s", proc.pid, e
             )
 

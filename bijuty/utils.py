@@ -12,7 +12,9 @@ import os
 import subprocess
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
-from enum import IntEnum
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -33,79 +35,6 @@ class CommandResult:
         """Check if the command failed."""
         return not self.success
 
-
-# =============================================================================
-# Logging
-# =============================================================================
-class LogLevel(IntEnum):
-    DEBUG = 10
-    INFO = 20
-    WARNING = 30
-    ERROR = 40
-
-    @property
-    def label(self):
-        # Provides the padded string for alignment in the console
-        return {
-            LogLevel.DEBUG: "DEBUG",
-            LogLevel.INFO: "INFO ",
-            LogLevel.WARNING: "WARN ",
-            LogLevel.ERROR: "ERROR",
-        }[self]
-
-class SimpleLogger:
-    """
-    A simple logger that prints messages with timestamps and log levels.
-    """
-
-    # ANSI color codes
-    COLORS = {
-        LogLevel.INFO: "\033[94m",      # Blue
-        LogLevel.DEBUG: "\033[90m",     # Gray
-        LogLevel.ERROR: "\033[91m",     # Red
-        LogLevel.WARNING: "\033[93m",   # Yellow
-        "reset": "\033[37m",
-    }
-
-    def __init__(self, use_colors: bool = True, level: LogLevel = LogLevel.INFO):
-        self.use_colors = use_colors
-        self.level = level
-
-    def set_log_level(self, level: LogLevel):
-        self.level = level
-
-    def log(self, message: str, asked_level: LogLevel) -> None:
-        """Log a message if it meets the minimum log level."""
-        if asked_level < self.level:
-            return
-
-        timestamp = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-        # Use the helper property for the string label
-        level_label = asked_level.label
-
-        if self.use_colors:
-            color = self.COLORS.get(asked_level, "")
-            reset = self.COLORS["reset"]
-            print(f"{reset}[{color}{level_label}{reset}] [{timestamp}] - {message}")
-        else:
-            print(f"[{level_label}] [{timestamp}] - {message}")
-
-    def info(self, message: str) -> None:
-        self.log(message, LogLevel.INFO)
-
-    def debug(self, message: str) -> None:
-        self.log(message, LogLevel.DEBUG)
-
-    def error(self, message: str) -> None:
-        self.log(message, LogLevel.ERROR)
-
-    def warning(self, message: str) -> None:
-        self.log(message, LogLevel.WARNING)
-
-# Global logger instance
-logger = SimpleLogger()
-logger.set_log_level(LogLevel.INFO)
 
 # =============================================================================
 # Environment Functions

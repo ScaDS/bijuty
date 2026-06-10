@@ -28,16 +28,18 @@
 }
 
 .log {
-  white-space: pre-wrap !important;
-  word-wrap: break-word !important;
-  overflow-wrap: break-word !important;
+  /* white-space: pre-wrap !important; */
+  /* word-wrap: break-word !important; */
+  /* overflow-wrap: break-word !important; */
+  overflow-x: scroll !important;
   max-width: 100% !important;
   /* background: #bbdefb !important; */
-  background: #000000 !important;
-  display: flex;
-  padding: 20px;
+  background: #ffffff !important;
+  display: flex !important;
+  padding: 20px !important;
   color: #ffffff !important;
-  width: 90vw;
+  /* width: 90vw; */
+
 }
 
 .slurm-card {

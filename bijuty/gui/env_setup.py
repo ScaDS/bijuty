@@ -16,10 +16,14 @@ import traceback
 from typing import Any, Dict
 import shutil
 import sys
+import logging
+
 import pyflink
 
 from .config import FRAMEWORK_REGISTRY
-from ..utils import run_bash_command, logger
+from ..utils import run_bash_command
+
+logger = logging.getLogger(__name__)
 
 
 class GUIEnvSetup:
@@ -248,23 +252,23 @@ class GUIEnvSetup:
         """
         flink_home = self.get_selected_framework_home()
         if not flink_home:
-            logger.error("Error: FLINK_HOME environment variable is not set.", file=sys.stderr)
+            logger.error("Error: FLINK_HOME environment variable is not set.")
             return False
 
         flink_lib_dir = os.path.join(flink_home, 'lib')
         if not os.path.exists(flink_lib_dir):
-            logger.error(f"Error: Flink lib directory does not exist at: {flink_lib_dir}", file=sys.stderr)
+            logger.error(f"Error: Flink lib directory does not exist at: {flink_lib_dir}")
             return False
 
         pyflink_dir = os.path.dirname(pyflink.__file__)
         pyflink_opt_dir = os.path.join(pyflink_dir, 'opt')
         if not os.path.exists(pyflink_opt_dir):
-            logger.error(f"Error: PyFlink 'opt' directory not found at: {pyflink_opt_dir}", file=sys.stderr)
+            logger.error(f"Error: PyFlink 'opt' directory not found at: {pyflink_opt_dir}")
             return False
 
         jar_files = [f for f in os.listdir(pyflink_opt_dir) if f.startswith('flink-python') and f.endswith('.jar')]
         if not jar_files:
-            logger.error(" Error: Could not find any flink-python*.jar in pyflink/opt folder.", file=sys.stderr)
+            logger.error("Error: Could not find any flink-python*.jar in pyflink/opt folder.")
             return False
 
         jar_name = jar_files[0]
@@ -275,10 +279,10 @@ class GUIEnvSetup:
             try:
                 shutil.copy2(source_jar_path, target_jar_path)
             except PermissionError:
-                print(f"❌ Error: Insufficient permissions to write to {flink_lib_dir}.", file=sys.stderr)
+                logger.error(f"Error: Insufficient permissions to write to {flink_lib_dir}.")
                 return False
             except Exception as e:
-                print(f"❌ Error: Failed to copy jar: {e}", file=sys.stderr)
+                logger.error(f"Error: Failed to copy jar: {e}")
                 return False
 
         return True
