@@ -347,7 +347,7 @@ class GUIMain(GUIEnvSetup):
     def _create_framework_widget(self) -> widgets.Dropdown:
         """Create the framework selection widget."""
         framework_list = list(FRAMEWORK_REGISTRY.keys())
-        default_value = self._default_framework if self._default_framework in framework_list else framework_list[1]
+        default_value = self._default_framework if self._default_framework in framework_list else framework_list[0]
         return WidgetFactory.create_dropdown(
             options=framework_list,
             value=default_value,
@@ -625,7 +625,7 @@ class GUIMain(GUIEnvSetup):
 
         # Observers to refresh cluster info label
         self.widgets["master_host"].observe(self._update_cluster_info, names="value")
-        for cb in self.widgets["worker_hosts"].children[0].children:
+        for cb in self.widgets["worker_hosts"].children[1].children:
             cb.observe(self._update_cluster_info, names="value")
 
         # Set up dynamic range updates
