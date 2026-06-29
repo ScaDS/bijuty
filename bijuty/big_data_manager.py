@@ -8,6 +8,7 @@ big data clusters (Spark and Flink) running on SLURM-managed resources.
 from __future__ import annotations
 
 import getpass
+import logging
 import os
 import shutil
 import sys
@@ -23,7 +24,9 @@ import psutil
 from .slurm_utils import SlurmManager
 from .gui.config import FrameworkConfig
 from .monitoring.process import ProcessMonitor
-from .utils import logger, run_bash_command
+from .utils import run_bash_command
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Constants
@@ -473,7 +476,6 @@ class BigDataManager:
 
         return (master_proc, worker_proc)
 
-
     # =====================================================================
     # Cluster Status
     # =====================================================================
@@ -508,8 +510,8 @@ class BigDataManager:
                 cmdline_str = " ".join(cmdline)
 
                 # Log for debugging
-                # if master_proc_patt in cmdline_str :
-                #     logger.debug(f"Checking PID {proc.pid}: {cmdline_str}")
+                if master_proc_patt in cmdline_str :
+                    logger.debug(f"Checking PID {proc.pid}: {cmdline_str}")
 
                 if master_proc_patt in cmdline_str:
                     found_master = True
@@ -517,7 +519,7 @@ class BigDataManager:
                 continue
 
 
-        workers_up, worker_count, err_msg = self.verify_cluster_workers()
+        workers_up, worker_count, err_msg = self._verify_cluster_workers()
         logger.debug(f"Worker Up: {workers_up}, Worker count:{worker_count}, Error Msg: {err_msg}")
 
         logger.debug(
@@ -695,12 +697,14 @@ class BigDataManager:
 
         logger.info(f"Cleanup complete for {self._user_inputs.fw_name}")
 
-
-    def verify_cluster_workers(self):
+    def _verify_cluster_workers(self):
         """
         Checks if all workers listed in a local text file are active in the cluster.
         Currently only number of workers are counted without matching the exact hostname.
-        :return: True if all hosts in the user selection are active in the cluster, False otherwise
+        :return
+            : True if all hosts in the user selection are active in the cluster, False otherwise
+            : Number of workers:
+            : error message (if any)
         """
 
         framework = self._user_inputs.fw_name.lower()
@@ -737,14 +741,12 @@ class BigDataManager:
                 workers = data.get("workers", [])
                 for w in workers:
                     if w.get("state") == "ALIVE":
-                        logger.info(w)
-                        # Spark returns raw hostnames/IPs
                         active_hosts.add(w.get("host").strip())
 
             elif framework == "flink":
                 active_hosts = data.get("taskmanagers", [])
 
-            # 4. Strictly evaluate if all expected hosts exist in the active set
+            # Evaluate if all expected hosts exist in the active set
             return len(expected_hosts) == len(active_hosts), len(active_hosts), ""
 
         except requests.exceptions.RequestException as e:

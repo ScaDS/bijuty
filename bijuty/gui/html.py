@@ -162,3 +162,59 @@ class HTMLGenerator:
             color=col_slurm_info,
         )
         return slurm_viz
+
+    @staticmethod
+    def generate_ssh_instructions(ssh_cmd: str) -> str:
+        """Generate HTML for SSH port-forwarding instructions."""
+        return f"""
+        <div style="padding:5px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-size:12px;width:70%;justify-content:center;margin: auto auto">
+          <b>Remote environment detected: </b> If above links do not open in your local browser, set up SSH port forwarding.
+          <pre style="background:#f7f7f7; padding:5px; margin:0px 0; font-family:monospace;font-size:12px;">{ssh_cmd}</pre>
+        </div>
+        """
+
+    @staticmethod
+    def generate_framework_cluster_info(
+        framework: str,
+        status_color: str,
+        status_text: str,
+        master: str,
+        master_port: str,
+        workers_str: str,
+        is_config_set: bool,
+    ) -> str:
+        """Generate HTML cluster-status and framework-configuration snippet."""
+        html_content = (
+            f"<div style='font-size:12px; color:#555; margin-top:4px; display:flex; flex-direction:column; width:100%; align-items:center;'>"
+            f"  <div style='display:flex; justify-content:center; align-items:center; margin-bottom:2px;'><b>Cluster Status:&nbsp;</b><span style='width:8px; height:8px; border-radius:50%; background:{status_color}; margin-right:4px;'></span> {status_text}</div>"
+            f"  <div style='display:flex; justify-content:center; align-items:center; margin-bottom:2px;'><b>Master:&nbsp;</b> {master}&nbsp;|&nbsp;<b>Port:&nbsp;</b>{master_port}</div>"
+            f"  <div style='display:flex; justify-content:center; align-items:center; margin-bottom:4px;'><b>Workers:&nbsp;</b> {workers_str}</div>"
+        )
+
+        if is_config_set:
+            if framework == "spark":
+                html_content += (
+                    f"  <div style='font-size:11px; color:#777; margin-top:4px; text-align:center;'>"
+                    f"    Use the master node name while initializing Spark context.<br>"
+                    f"    <b>eg. spark://{master}:{master_port}</b>"
+                    f"  </div>"
+                )
+            elif framework == "flink":
+                py_code = (
+                    "from pyflink.common.configuration import Configuration\n\n"
+                    "config = Configuration()\n"
+                    'config.set_string("execution.target", "remote")\n'
+                    f'config.set_string("jobmanager.rpc.address", "{master}")\n'
+                    f'config.set_string("jobmanager.rpc.port", "{master_port}")\n'
+                    f'config.set_string("rest.address", "{master}")\n'
+                    'config.set_string("rest.port", "8081")'
+                )
+                html_content += (
+                    f"  <div style='font-size:11px; color:#777; margin-top:6px; display:flex; flex-direction:column; width:90%; align-items:flex-start;'>"
+                    f"    <span style='margin-bottom:4px; align-self:center; text-align:center;'>Set this configuration in your notebook before running the job:</span>"
+                    f"    <pre style='font-size:11px;background:#f4f4f4; padding:8px; border-radius:4px; border:1px solid #ddd; font-family:monospace; width:100%; box-sizing:border-box; margin:0; text-align:left;'>{py_code}</pre>"
+                    f"  </div>"
+                )
+
+        html_content += "</div>"
+        return html_content
