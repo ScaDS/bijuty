@@ -13,7 +13,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 import socket
-
+from datetime import datetime, timedelta
 
 # =============================================================================
 # Exceptions
@@ -78,23 +78,53 @@ class JobResources:
 def is_in_slurm_job() -> bool:
     """
     Check if currently running inside a SLURM job.
-
-    Returns:
-        True if SLURM_JOB_ID environment variable is set, False otherwise
     """
-    return "SLURM_JOB_ID" in os.environ
+    _SLURM_JOB_ID_VARS = ("SLURM_JOB_ID", "SLURM_JOBID")
+    for var in _SLURM_JOB_ID_VARS:
+        val = os.environ.get(var, "").strip()
+        if val.isdigit():
+            return True
+    return False
+
+def get_local_cpu_count() -> int:
+    """Get the number of CPUs available on the local machine."""
+    return os.cpu_count() or 1
 
 
-def get_slurm_env_context() -> Dict[str, str]:
+def get_local_memory_mb() -> int:
+    """Get total memory of the local machine in MB."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) // 1024  # kB -> MB
+    except OSError:
+        pass
+    return 0
+
+
+def get_slurm_env_context(local_machine: bool=False) -> Dict[str, str]:
     """
     Get all SLURM environment variables.
-
-    Extracts and returns all environment variables starting with "SLURM_",
-    with the prefix removed for cleaner keys.
-
-    Returns:
-        Dictionary of SLURM environment variables
     """
+
+    if local_machine:
+        cpus = get_local_cpu_count()
+        mem_mb = get_local_memory_mb()
+        os.environ.setdefault("SLURM_JOB_ID", "localhost")
+        os.environ.setdefault("SLURM_JOB_NAME", "local-machine")
+        os.environ.setdefault("SLURM_JOB_USER", os.environ.get("USER") or "unknown")
+        os.environ.setdefault("SLURM_SUBMIT_DIR", os.getcwd())
+        os.environ.setdefault("SLURM_NNODES", "1")
+        os.environ.setdefault("SLURM_NTASKS", "1")
+        os.environ.setdefault("SLURM_CPUS_PER_TASK", str(cpus))
+        os.environ.setdefault("SLURM_MEM_PER_NODE", str(mem_mb))
+        os.environ.setdefault("SLURM_JOB_NODELIST", socket.gethostname() or "localhost")
+        os.environ.setdefault("SLURM_PROCID", "0")
+        os.environ.setdefault("SLURM_LOCALID", "0")
+        os.environ.setdefault("SLURM_JOB_START_TIME", datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+
+    # Extract and format the relevant variables
     return {
         key.replace("SLURM_", ""): value
         for key, value in os.environ.items()
@@ -109,26 +139,11 @@ def get_slurm_env_context() -> Dict[str, str]:
 class SlurmManager:
     """
     Manager for interacting with SLURM workload manager.
-
-    This class provides methods to query job information, manage allocations,
-    and interact with SLURM commands. It must be initialized within an active
-    SLURM job.
-
-    Attributes:
-        job_id: The SLURM job ID
-        job_context: Dictionary of SLURM environment variables
-        job_info: Raw job information from SLURM
     """
 
     def __init__(self, allow_outside_job: bool = False):
         """
         Initialize the SlurmManager.
-
-        Args:
-            allow_outside_job: If True, allow initialization outside SLURM job
-
-        Raises:
-            NotInSlurmJobError: If not in a SLURM job and allow_outside_job is False
         """
         self._in_slurm_job = is_in_slurm_job()
 
@@ -148,12 +163,14 @@ class SlurmManager:
             self._start_time = self._job_info["start_time"]["number"]
             self._partition = self._job_info["partition"]
         else:
-            self._job_context = {}
-            self._job_id = "none"
-            self._job_info_raw = {}
-            self._job_name = ""
-            self._start_time = ""
-            self._partition = ""
+            self._job_context = get_slurm_env_context(local_machine=True)
+            self._user = os.environ.get("USER")
+            self._job_id = self._job_context.get("JOB_ID", "localhost")
+            self._job_info_raw = self._fetch_job_info()
+            self._job_info = self._job_info_raw["jobs"][0]
+            self._job_name = self._job_info["name"]
+            self._start_time = self._job_info["start_time"]["number"]
+            self._partition = self._job_info["partition"]
 
 
         self._login_node = self._get_default_login_host()
@@ -232,6 +249,9 @@ class SlurmManager:
         Returns:
             Parsed JSON job information
         """
+        if not self._in_slurm_job:
+            return self._fetch_local_job_info()
+
         if self._job_id == "unknown":
             return {}
 
@@ -248,6 +268,34 @@ class SlurmManager:
             return {"raw_output": output}
         except (json.JSONDecodeError, SlurmCommandError) as e:
             return {"error": str(e)}
+
+    def _fetch_local_job_info(self) -> Dict[str, Any]:
+        """
+        Build raw job information for a local (non-SLURM) run,
+        mimicking the structure of `scontrol show job --json` output
+        using the local machine's specifications.
+        """
+        cpus = get_local_cpu_count()
+        mem_mb = get_local_memory_mb()
+        hostname = socket.gethostname() or "localhost"
+        return {
+            "jobs": [
+                {
+                    "job_id": self._job_id,
+                    "name": "local-machine",
+                    "partition": "local",
+                    "user_name": os.environ.get("USER") or "unknown",
+                    "node_count": {"set": True, "infinite": False, "number": 1},
+                    "cpus_per_task": {"set": True, "infinite": False, "number": cpus},
+                    "tasks": {"set": True, "infinite": False, "number": 1},
+                    "memory_per_cpu": {"set": False, "infinite": False, "number": mem_mb // max(cpus, 1)},
+                    "memory_per_node": {"set": True, "infinite": False, "number": mem_mb},
+                    "start_time": {"set": True, "infinite": False, "number": self._job_context.get("JOB_START_TIME", "")},
+                    "job_resources": {"nodes": [hostname]},
+                    "nodes": hostname,
+                }
+            ]
+        }
 
     def _parse_job_resources(self) -> JobResources:
         """

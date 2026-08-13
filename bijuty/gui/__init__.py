@@ -15,7 +15,6 @@ from .widgets import (
     ContainerMixin,
     create_placeholder_logo,
     fetch_image,
-    DEFAULT_LABEL_STYLE,
     DEFAULT_WIDGET_LAYOUT,
 )
 from .main import GUIMain
@@ -36,7 +35,6 @@ __all__ = [
     "ContainerMixin",
     "create_placeholder_logo",
     "fetch_image",
-    "DEFAULT_LABEL_STYLE",
     "DEFAULT_WIDGET_LAYOUT",
     # Main gui class
     "GUIMain",

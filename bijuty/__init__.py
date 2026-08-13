@@ -24,7 +24,7 @@ class _LoggerFormatter(logging.Formatter):
         logging.ERROR: "\033[91m",    # Red
         logging.CRITICAL: "\033[31m",  # Dark Red
     }
-    _RESET = "\033[0m"
+    _RESET = "\033[0m" # Black
 
     def __init__(self, datefmt: str = "%d/%m/%Y %H:%M:%S"):
         super().__init__(datefmt=datefmt)

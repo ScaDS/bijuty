@@ -48,8 +48,7 @@ class GUIEnvSetup:
         dest = shlex.quote(
             os.path.dirname(self.get_selected_config_destination())
         )
-
-        script_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        script_dir = shlex.quote(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
         bash_command = (
             f"cd {script_dir} && source ./framework-configure.sh "
@@ -58,11 +57,13 @@ class GUIEnvSetup:
             f"--destination {dest} "
             f"&& env | grep {fw_name} || true"
         )
-
         start_time = time.time()
         self._log(f"Initializing configuration at: {dest}")
         self._log(bash_command, "debug")
-        res = run_bash_command(bash_command, shell=True, timeout=6000)
+        res= run_bash_command(bash_command, shell=True, timeout=6000)
+        logger.info(res.stdout)
+        logger.info(res.stderr)
+
         elapsed = time.time() - start_time
         self._log(f"Time elapsed for config init: {elapsed:.2f} seconds", "debug")
 

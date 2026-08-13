@@ -18,6 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 import requests
+import shlex
 
 import psutil
 
@@ -29,115 +30,19 @@ from .utils import run_bash_command
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Constants
-# =============================================================================
-
-# DEFAULT_LOG_SPACER = "  "
-# DEFAULT_MASTER_PORT_SPARK = 7077
-# DEFAULT_MASTER_PORT_FLINK = 8081
-# PORT_RANDOMIZATION_BASE = 7077
-
-
-# =============================================================================
-# Data Classes
-# =============================================================================
-
-# @dataclass
-# class ClusterConfig:
-#     """Configuration for a big data cluster."""
-
-#     fw_name: str
-#     master: str
-#     workers: List[str]
-#     master_port: str
-#     conf_dir: str
-#     log_dir: str
-#     template: Optional[str] = None
-#     randomize_ports: bool = False
-
-# =============================================================================
-# Exceptions
-# =============================================================================
-
-# class ClusterConfigurationError(Exception):
-#     """Raised when cluster configuration fails."""
-#     pass
-
-
-# class ClusterOperationError(Exception):
-#     """Raised when a cluster operation (start/stop) fails."""
-#     pass
-
-
-# class NotInitializedError(Exception):
-#     """Raised when trying to use BigDataManager before initialization."""
-#     pass
-
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
-# def parse_path(path: str, resolve_symlinks: bool = True) -> str:
-#     """Parse and normalize a file path."""
-#     path = os.path.expanduser(path)
-#     path = os.path.abspath(path)
-#     if resolve_symlinks:
-#         path = os.path.realpath(path)
-#     return path
-
-
-# def find_processes_using_dir(target_dir: str) -> List[Tuple[int, str, str]]:
-#     """Find processes that are using a specific directory."""
-#     target_dir = parse_path(target_dir)
-#     found_processes = []
-
-#     for proc in psutil.process_iter(["pid", "name"]):
-#         try:
-#             # Check if process CWD is the target directory
-#             if os.path.abspath(proc.cwd()) == target_dir:
-#                 found_processes.append(
-#                     (proc.info["pid"], proc.info["name"], "Working Directory")
-#                 )
-
-#             # Check if process has open files in the directory
-#             for file in proc.open_files():
-#                 if file.path.startswith(target_dir):
-#                     found_processes.append(
-#                         (proc.info["pid"], proc.info["name"], f"Open File: {file.path}")
-#                     )
-#                     break
-
-#         except (psutil.AccessDenied, psutil.NoSuchProcess):
-#             continue
-
-#     return found_processes
-
-# =============================================================================
 # Big Data Manager
 # =============================================================================
 
 class BigDataManager:
     """
     Manager for big data clusters (Spark, Flink).
-
-    This class provides functionality to:
-    - Configure clusters from templates
-    - Start and stop clusters
-    - Monitor cluster health
-    - Manage cluster processes
-
-    Attributes:
-        initialized: Whether the manager has been initialized with user inputs
-        user_inputs: Namespace containing cluster configuration
-        fw_mapping: Framework configuration mapping
     """
 
-    def __init__(self):
+    def __init__(self, slurm_info: Optional[SlurmManager] = None):
         """Initialize the BigDataManager."""
         self._initialized = False
         # self._message_spacer = DEFAULT_LOG_SPACER
-        self._slurm = SlurmManager()
+        self._slurm = slurm_info or SlurmManager()
         self._cluster_name = os.uname().nodename
 
         # Initialize user inputs namespace
@@ -189,245 +94,7 @@ class BigDataManager:
         self._fw_mapping = props.get("fw_mapping")
         self._initialized = True
 
-    # =====================================================================
-    # Configuration Setup
-    # =====================================================================
-
-    # def setup_config(
-    #     self,
-    #     conf_dest: Optional[str] = None,
-    #     conf_template: Optional[str] = None,
-    #     randomize_ports: bool = False,
-    # ) -> None:
-    #     """
-    #     Set up cluster configuration from template.
-
-    #     Args:
-    #         conf_dest: Configuration destination directory
-    #         conf_template: Path to configuration template
-    #         randomize_ports: Whether to randomize master ports
-    #     """
-    #     if not self._initialized:
-    #         logger.error("BigDataManager must be initialized before setup_config")
-    #         return 1
-
-    #     self._conf_dest = parse_path(conf_dest) if conf_dest else None
-    #     self._conf_template = parse_path(conf_template) if conf_template else None
-    #     self._randomize_ports = randomize_ports
-
-    #     if not self._slurm.in_slurm_job:
-    #         logger.warning("Not in a SLURM job - some features may not work")
-    #         return
-    #     self._setup_configuration_directory()
-    #     self._initialize_framework_configuration()
-
-    # def _setup_configuration_directory(self) -> None:
-    #     """Set up the configuration directory, archiving existing if needed."""
-    #     # Set default destination if not provided
-    #     if not self._conf_dest:
-    #         self._conf_dest = parse_path(
-    #             f"./cluster-conf-{self._slurm.job_id}"
-    #         )
-
-    #     # Handle existing configuration directory
-    #     if os.path.isdir(self._conf_dest):
-    #         logger.info(f"Archiving existing configuration: '{self._conf_dest}'")
-    #         self._archive_configuration_directory()
-    #     else:
-    #         logger.info(f"Creating configuration directory: '{self._conf_dest}'")
-    #         os.makedirs(self._conf_dest, exist_ok=True)
-
-    # def _archive_configuration_directory(self) -> None:
-    #     """Archive existing configuration and remove original."""
-    #     results = find_processes_using_dir(self._conf_dest)
-
-    #     if results:
-    #         self._print_process_table(results)
-
-    #     try:
-    #         archive_name = f"{self._conf_dest}_backup_{time.time_ns()}"
-    #         shutil.make_archive(archive_name, "zip", self._conf_dest)
-    #         shutil.rmtree(self._conf_dest)
-    #         logger.info(f"Archived to {archive_name}.zip and removed original")
-    #     except Exception as e:
-    #         logger.error(f"Failed to archive: {e}")
-    #         if results:
-    #             self._print_process_table(results)
-    #             logger.error("Kill processes using: !kill <process_id>")
-    #         raise ClusterConfigurationError(f"Archive failed: {e}")
-
-    # @staticmethod
-    # def _print_process_table(processes: List[Tuple[int, str, str]]) -> None:
-    #     """Print a formatted table of processes."""
-    #     print(f"{'PID':<10} {'Process Name':<25} {'Reason'}")
-    #     print("-" * 60)
-    #     for pid, name, reason in processes:
-    #         print(f"{pid:<10} {name:<25} {reason}")
-
-    # def _initialize_framework_configuration(self) -> None:
-    #     """Initialize framework-specific configuration."""
-    #     fw_name = self._user_inputs.fw_name
-
-    #     # Get template path
-    #     if not self._conf_template:
-    #         env_var = f"{fw_name}_CONF_TEMPLATE"
-    #         self._conf_template = os.environ.get(env_var)
-    #         if not self._conf_template:
-    #             raise ClusterConfigurationError(f"Template not found in {env_var}")
-
-    #     self._log_configuration_info()
-    #     self._run_framework_configure_script()
-
-    #     # Set up framework-specific settings
-    #     if fw_name == "SPARK":
-    #         self._setup_spark_configuration()
-
-    # def _log_configuration_info(self) -> None:
-    #     """Log configuration information."""
-    #     fw_name = self._user_inputs.fw_name
-    #     logger.info("Environment configuration initialized:")
-    #     logger.info(f"{self._message_spacer}• Framework:        {fw_name}")
-    #     logger.info(f"{self._message_spacer}• Config template:  {self._conf_template}")
-    #     logger.info(f"{self._message_spacer}• Config target:    {self._conf_dest}")
-
-    #     if fw_name == "SPARK":
-    #         logger.info(f"{self._message_spacer}• Log directory:    {self._get_log_dir()}")
-
-    #     # Set environment variables
-    #     os.environ[f"MY_{fw_name}_CONF_DEST"] = self._conf_dest
-    #     os.environ[f"MY_{fw_name}_CONF_TEMPLATE"] = self._conf_template
-
-    #     if fw_name == "SPARK":
-    #         os.environ["PYSPARK_PYTHON"] = sys.executable
-
-    # def _run_framework_configure_script(self) -> None:
-    #     """Run the framework configuration script."""
-    #     fw_lower = self._user_inputs.fw_name.lower()
-
-    #     fw_conf_cmd = (
-    #         f"source framework-configure.sh "
-    #         f"--framework {fw_lower} "
-    #         f"--template {self._conf_template} "
-    #         f"--destination {self._conf_dest}"
-    #     )
-
-    #     full_cmd = f"{fw_conf_cmd}; env | grep {self._user_inputs.fw_name}"
-
-    #     logger.info("Initializing configuration from template")
-    #     result = run_bash_command(full_cmd, shell=True)
-
-    #     if result.failed:
-    #         logger.error(f"Configuration initialization failed: {result.stderr}")
-    #         raise ClusterConfigurationError(result.stderr)
-    #     from .utils import debug_write_to_file
-    #     debug_write_to_file(result.stdout)
-    #     logger.info(result.stdout)
-    #     # Parse environment variables from output
-    #     for line in result.stdout.strip().split("\n"):
-    #         if "=" in line:
-    #             key, value = line.strip().split("=", 1)
-    #             os.environ[key] = value
-
-    #     # Set configuration directory environment variable
-    #     conf_dir_full = f"{self._conf_dest}/{self._user_inputs.fw_name.lower()}"
-    #     os.environ[f"{self._user_inputs.fw_name}_CONF_DIR"] = conf_dir_full
-    #     logger.info(os.environ.items())
-
-
-    # def _setup_spark_configuration(self) -> None:
-    #     """Set up Spark-specific configuration."""
-    #     slurm_nodes = self._slurm.get_nodes_list()
-
-    #     # Determine master port
-    #     default_port = self._fw_mapping.get(self._user_inputs.fw_name.upper(), {}).get(
-    #         "default_master_port", DEFAULT_MASTER_PORT_SPARK
-    #     )
-
-    #     try:
-    #         master_port = int(self._user_inputs.master_port)
-    #     except (ValueError, TypeError):
-    #         master_port = default_port
-
-    #     if self._randomize_ports:
-    #         job_id_suffix = self._slurm.job_id[-3:] if len(self._slurm.job_id) >= 3 else self._slurm.job_id
-    #         master_port = int(job_id_suffix) + PORT_RANDOMIZATION_BASE
-    #         os.environ[f"{self._user_inputs.fw_name}_MASTER_PORT"] = str(master_port)
-
-    #     master_host = slurm_nodes[0] if slurm_nodes else "localhost"
-    #     worker_hosts = slurm_nodes
-
-    #     logger.info("Cluster topology:")
-    #     logger.info(f"{self._message_spacer}• Master:  {master_host}:{master_port}")
-    #     logger.info(f"{self._message_spacer}• Workers: {', '.join(worker_hosts)}")
-
-    #     # Configure spark-env.sh
-    #     conf_dir = os.environ[f"{self._user_inputs.fw_name}_CONF_DIR"]
-    #     self._write_spark_env_sh(conf_dir, master_host, master_port)
-
-    #     # Update spark-submit script
-    #     self._update_spark_submit_script(master_host, master_port)
-
-    #     # Write workers file
-    #     self._write_workers_file(worker_hosts)
-
-    #     # Log access information
-    #     self._log_spark_access_info(master_host)
-
-    # def _write_spark_env_sh(
-    #     self, conf_dir: str, master_host: str, master_port: int
-    # ) -> None:
-    #     """Write Spark environment configuration."""
-    #     spark_env_path = Path(conf_dir) / "spark-env.sh"
-    #     ld_path_result = run_bash_command("echo $LD_LIBRARY_PATH", shell=True)
-    #     ld_path = ld_path_result.stdout if ld_path_result.success else ""
-
-    #     with open(spark_env_path, "a") as f:
-    #         f.write(f"export LD_LIBRARY_PATH={ld_path}\n")
-    #         f.write(f"export {self._user_inputs.fw_name}_MASTER_PORT={master_port}\n")
-    #         f.write(f"export SPARK_MASTER_HOST={master_host}\n")
-
-    # def _update_spark_submit_script(self, master_host: str, master_port: int) -> None:
-    #     """Update the spark-submit script with correct master URL."""
-    #     conf_dir = os.environ.get(f"{self._user_inputs.fw_name}_CONF_DIR", "")
-    #     spark_submit_path = Path(conf_dir) / "spark-submit"
-
-    #     if spark_submit_path.exists():
-    #         cmd = (
-    #             f"sed -i 's!\\(spark://\\)[a-zA-Z0-9]*:[0-9]*!"
-    #             f"\\1{master_host}:{master_port}!' {spark_submit_path}"
-    #         )
-    #         run_bash_command(cmd, shell=True)
-
-    # def _write_workers_file(self, worker_hosts: List[str]) -> None:
-    #     """Write the workers configuration file."""
-    #     conf_dir = os.environ.get(f"{self._user_inputs.fw_name}_CONF_DIR", "")
-    #     workers_path = Path(conf_dir) / "workers"
-
-    #     with open(workers_path, "w") as f:
-    #         for worker in worker_hosts:
-    #             f.write(f"{worker}\n")
-
-    # def _log_spark_access_info(self, master_host: str) -> None:
-    #     """Log information for accessing Spark web UIs."""
-    #     cluster_domain = os.uname().nodename
-    #     user = getpass.getuser()
-
-    #     logger.info(
-    #         "Spark master URL: spark://"
-    #         f"{master_host}:{self._user_inputs.master_port}"
-    #     )
-    #     logger.info("Access Spark GUI using port forwarding:")
-    #     logger.info(
-    #         f"{self._message_spacer}ssh {user}@login1.{cluster_domain} "
-    #         f"-L 4040:{master_host}:4040 "
-    #         f"-L 8080:{master_host}:8080 "
-    #         f"-L 8081:{master_host}:8081"
-    #     )
-    #     logger.info("Then access:")
-    #     logger.info(f"{self._message_spacer}• http://localhost:4040")
-    #     logger.info(f"{self._message_spacer}• http://localhost:8080")
-    #     logger.info(f"{self._message_spacer}• http://localhost:8081")
-
+    
     # =====================================================================
     # Configuration Getters
     # =====================================================================
@@ -584,12 +251,12 @@ class BigDataManager:
         fw_config : FrameworkConfig = self._fw_mapping.get(self._user_inputs.fw_name.upper(), {})
         log_path = self.get_cluster_log_file()
         fw_name = self._user_inputs.fw_name.upper()
-        conf_dir = os.environ[f"{fw_name}_CONF_DIR"]
+        conf_dir = shlex.quote(os.environ[f"{fw_name}_CONF_DIR"])
         full_cmd = f"{conf_dir}/cmd.sh start {conf_dir} > {log_path} 2>&1"
         logger.debug(f"Running: {full_cmd}")
         result = run_bash_command(full_cmd, shell=True)
 
-        if result.failed:
+        if result.returncode != 0:
             logger.error(f"Failed to start cluster: {result.stderr}")
             return False
 
@@ -609,9 +276,9 @@ class BigDataManager:
             return 1
 
         logger.info(f"Stopping {self._user_inputs.fw_name} cluster")
-        log_path = self.get_cluster_log_file()
         fw_name = self._user_inputs.fw_name.upper()
-        conf_dir = os.environ[f"{fw_name}_CONF_DIR"]
+        log_path = shlex.quote(self.get_cluster_log_file())
+        conf_dir = shlex.quote(os.environ[f"{fw_name}_CONF_DIR"])
 
         try:
             log_path = self.get_cluster_log_file()
@@ -697,28 +364,24 @@ class BigDataManager:
 
         logger.info(f"Cleanup complete for {self._user_inputs.fw_name}")
 
-    def _verify_cluster_workers(self):
+    def _verify_cluster_workers(self) -> tuple[bool, int, Exception | str]:
         """
         Checks if all workers listed in a local text file are active in the cluster.
         Currently only number of workers are counted without matching the exact hostname.
-        :return
-            : True if all hosts in the user selection are active in the cluster, False otherwise
-            : Number of workers:
-            : error message (if any)
         """
 
         framework = self._user_inputs.fw_name.lower()
 
         worker_list = self._get_worker_hosts()
         if worker_list is not None and len(worker_list) < 1:
-            return False
+            return False, 0, "no workers configured"
 
         expected_hosts = set()
         for worker_i in worker_list:
             expected_hosts.add(worker_i)
 
         if not expected_hosts:
-            return False
+            return False, 0, "no workers configured"
 
         #port = self._get_master_port()
         host = self._get_master_host()
@@ -729,7 +392,8 @@ class BigDataManager:
             port = 8081
             url = f"http://{host}:{port}/taskmanagers"
         else:
-            return False
+            return False, 0, "no workers configured"
+
 
         active_hosts = set()
         try:

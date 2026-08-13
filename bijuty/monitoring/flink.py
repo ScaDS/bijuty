@@ -150,9 +150,10 @@ class FlinkMetricCollector:
         self,
         base_url: Optional[str] = None,
         history_size: int = DEFAULT_HISTORY_SIZE,
+        slurm_info: Optional[SlurmManager] = None,
     ) -> None:
         self.timeout = 10
-        self._slurm = SlurmManager(allow_outside_job=True)
+        self._slurm = slurm_info or SlurmManager(allow_outside_job=True)
         self._base_url = self._resolve_url(base_url)
         self._history_size = history_size
         self.history: Dict[str, FlinkMetricsHistory] = {}
@@ -307,8 +308,10 @@ class FlinkMetricMonitor(MetricDashboard):
         self,
         base_url: Optional[str] = None,
         refresh_interval: float = DEFAULT_REFRESH_INTERVAL,
+        slurm_info: Optional[SlurmManager] = None,
     ) -> None:
-        collector = FlinkMetricCollector(base_url=base_url)
+        self._slurm_info = slurm_info
+        collector = FlinkMetricCollector(base_url=base_url, slurm_info=slurm_info)
         extra = [
             WidgetFactory.create_styled_button_redirect(
                 description="Flink Web UI",
@@ -333,7 +336,7 @@ class FlinkMetricMonitor(MetricDashboard):
             else:
                 raise Exception("Please provide base url")
 
-        self.collector = FlinkMetricCollector(base_url=self._base_url)
+        self.collector = FlinkMetricCollector(base_url=self._base_url, slurm_info=self._slurm_info)
 
     def _get_metric_display_name(self, metric: str) -> str:
         display_map = {
