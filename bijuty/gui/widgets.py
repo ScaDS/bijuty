@@ -24,10 +24,10 @@ DEFAULT_WIDGET_LAYOUT = widgets.Layout(
 
 DEFAULT_SLIDER_HANDLE_COLOR = "#ffffff00"
 
-
 # =============================================================================
 # Standalone helpers
 # =============================================================================
+
 
 def fetch_image(url: str) -> bytes:
     """Fetch image content from URL."""
@@ -95,7 +95,8 @@ class WidgetFactory:
         current_html = widget.value
         clean_html = re.sub(r'\s+disabled(?=[\s>])', '', current_html)
         if disable:
-            new_html = re.sub(r'(<button[^>]*)(>)', r'\1 disabled\2', clean_html)
+            new_html = re.sub(r'(<button[^>]*)(>)',
+                              r'\1 disabled\2', clean_html)
         else:
             new_html = clean_html
         widget.value = new_html
@@ -134,8 +135,6 @@ class WidgetFactory:
             # for i in [ "slider-track", "ui-slider", "ui-slider-range" ]:
             #     slider.add_class(i)
         return slider
-
-
 
     @staticmethod
     def create_dropdown(
@@ -246,7 +245,8 @@ class CustomCheckbox(widgets.HBox):
     value = Bool(False).tag(sync=True)
 
     def __init__(self, description="Label", value=False, **kwargs):
-        self._checkbox: widgets.Checkbox = widgets.Checkbox(value=value, indent=False)
+        self._checkbox: widgets.Checkbox = widgets.Checkbox(
+            value=value, indent=False)
         self._checkbox.add_class("custom-box-design")
 
         self._label: widgets.Label = widgets.Label(value=f"{description}: ")
@@ -269,7 +269,8 @@ class CustomCheckbox(widgets.HBox):
             </style>
         """)
 
-        super().__init__(children=[self._label, self._checkbox, self._css], **kwargs)
+        super().__init__(children=[self._label,
+                                   self._checkbox, self._css], **kwargs)
         widgets.link((self._checkbox, "value"), (self, "value"))
 
     def update_label(self, label: str):

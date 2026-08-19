@@ -6,6 +6,16 @@ This package provides tools for configuring and managing big data frameworks
 """
 
 from __future__ import annotations
+from .gui.multi_framework_manager import MultiFrameworkManager
+from .gui.widgets import WidgetFactory
+from .gui.html import HTMLGenerator
+from .gui.config import (
+    FRAMEWORK_REGISTRY,
+    FrameworkConfig,
+    ResourceAllocation,
+    COLOR_SCHEME,
+)
+from .gui.main import GUIMain
 
 import logging
 import sys
@@ -13,6 +23,7 @@ import sys
 # =============================================================================
 # Package-wide logging configuration
 # =============================================================================
+
 
 class _LoggerFormatter(logging.Formatter):
     """Colored formatter matching the legacy SimpleLogger output style."""
@@ -24,7 +35,7 @@ class _LoggerFormatter(logging.Formatter):
         logging.ERROR: "\033[91m",    # Red
         logging.CRITICAL: "\033[31m",  # Dark Red
     }
-    _RESET = "\033[0m" # Black
+    _RESET = "\033[0m"  # Black
 
     def __init__(self, datefmt: str = "%d/%m/%Y %H:%M:%S"):
         super().__init__(datefmt=datefmt)
@@ -54,6 +65,7 @@ def set_log_level(level: int | str) -> None:
 # Configure the package root logger once
 _bijuty_log = logging.getLogger("bijuty")
 _bijuty_log.setLevel(logging.INFO)
+# _bijuty_log.setLevel(logging.DEBUG)
 
 # Avoid duplicate handlers on reload (common in Jupyter)
 if not _bijuty_log.handlers:
@@ -63,16 +75,6 @@ if not _bijuty_log.handlers:
 
 
 # Import GUI components for easy access
-from .gui.main import GUIMain
-from .gui.config import (
-    FRAMEWORK_REGISTRY,
-    FrameworkConfig,
-    ResourceAllocation,
-    COLOR_SCHEME,
-)
-from .gui.html import HTMLGenerator
-from .gui.widgets import WidgetFactory
-from .gui.multi_framework_manager import MultiFrameworkManager
 
 __all__ = [
     "GUIMain",

@@ -177,7 +177,7 @@ class FlinkMetricCollector:
             return localhost_url
 
         try:
-            nodes = self._slurm.get_nodes_list()
+            nodes = self._slurm.resources.node_list
             if nodes:
                 direct_url = f"http://{nodes[0]}:8081"
                 if self._check_url(direct_url):

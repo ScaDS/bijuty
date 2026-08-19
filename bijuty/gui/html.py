@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
 from ..slurm_utils import SlurmManager
 
@@ -77,11 +77,11 @@ class HTMLGenerator:
         props: Dict[str, str],
         slurm_info: SlurmManager,
     ) -> str:
-        slurm_cpu_per_node = slurm_info.get_cpus_per_node()
-        slurm_cpu_total = slurm_info.get_total_cpus()
-        slurm_mem_per_node = slurm_info.get_memory_per_node()
-        slurm_mem_total = slurm_info.get_total_memory()
-        slurm_node_list = slurm_info.get_nodes_list()
+        slurm_cpu_per_node = slurm_info.resources.cpus_per_node
+        slurm_cpu_total = slurm_info.resources.total_cpus
+        slurm_mem_per_node = slurm_info.resources.memory_per_node_effective
+        slurm_mem_total = slurm_info.resources.total_memory
+        slurm_node_list = slurm_info.resources.node_list
         slurm_children = []
         master_node = props.get("master_node", slurm_node_list[0])
         coordinator_cores = props.get("drv_cpu_val")
