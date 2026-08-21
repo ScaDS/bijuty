@@ -34,6 +34,7 @@ from ..slurm_utils import SlurmManager
 from ..monitoring.process import ProcessMonitor
 from ..monitoring.spark import SparkMetricMonitor
 from ..monitoring.flink import FlinkMetricMonitor
+from ..monitoring.pika import PikaMetricMonitor
 from ..utils import get_file_content, find_first_available_port
 
 logger = logging.getLogger(__name__)
@@ -58,11 +59,6 @@ class GUIMain(GUIEnvSetup):
         self.user = os.environ.get("USER", "unknown")
         self.cluster_name = socket.getfqdn().strip()
 
-        # Initialize managers
-        self.slurm_info = SlurmManager(allow_outside_job=True)
-        self.bdm = BigDataManager(slurm_info=self.slurm_info)
-        self.process_monitor = ProcessMonitor(slurm_info=self.slurm_info)
-
         # Widget containers
         self.widgets: Dict[str, Any] = {}
         self._last_cluster_result: Optional[Any] = None
@@ -76,6 +72,13 @@ class GUIMain(GUIEnvSetup):
         # Default framework override
         self._default_framework = default_framework
 
+        # Initialize managers
+        self.slurm_info = SlurmManager(allow_outside_job=True)
+        self.bdm = BigDataManager(slurm_info=self.slurm_info)
+        self.process_monitor = ProcessMonitor(slurm_info=self.slurm_info)
+        self.fw_monitor = self._get_framework_monitor()
+        self.pika_monitor = self._get_pika_monitor()
+
     def _get_spark_monitor(self) -> SparkMetricMonitor:
         if not hasattr(self, "_spark_monitor"):
             self._spark_monitor = SparkMetricMonitor()
@@ -87,8 +90,18 @@ class GUIMain(GUIEnvSetup):
                 slurm_info=self.slurm_info)
         return self._flink_monitor
 
+    def _get_pika_monitor(self) -> PikaMetricMonitor:
+        if not hasattr(self, "_pika_monitor"):
+            self._pika_monitor = PikaMetricMonitor(
+                base_url=os.environ.get("PIKA_BASE_URL"),
+                token=os.environ.get("PIKA_TOKEN"),
+                slurm_info=self.slurm_info,
+            )
+        return self._pika_monitor
+
     def _get_framework_monitor(self):
         fw_name = self.get_selected_framework_name()
+
         if fw_name and fw_name.lower() == "flink":
             return self._get_flink_monitor()
         return self._get_spark_monitor()
@@ -173,8 +186,8 @@ class GUIMain(GUIEnvSetup):
     def _reinitalize_dashboard(self) -> None:
         self.process_monitor.set_process_names(
             self.bdm.get_fw_cluster_processes(all_procs=True))
-        fw_monitor = self._get_framework_monitor()
-        fw_monitor.set_monitor(user_input=self.bdm._user_inputs)
+        self.fw_monitor = self._get_framework_monitor()
+        self.fw_monitor.set_monitor(user_input=self.bdm._user_inputs)
         # self._update_metric_dashboard_widget()
 
     # =========================================================================
@@ -537,13 +550,15 @@ class GUIMain(GUIEnvSetup):
 
     def _create_metric_dashboard(self) -> widgets.Box:
         """Create the metric dashboard widget."""
-        fw_monitor = self._get_framework_monitor()
+        # fw_monitor = self._get_framework_monitor()
         return widgets.VBox(
             [
                 widgets.HTML("<div>Process Metrics</div>"),
                 self.process_monitor.get_ui(),
                 widgets.HTML("<div>Framework Metrics</div>"),
-                fw_monitor.get_ui(),
+                self.fw_monitor.get_ui(),
+                widgets.HTML("<div>Pika Cluster Metrics</div>"),
+                self.pika_monitor.get_ui(),
             ]
         )
 
@@ -659,8 +674,9 @@ class GUIMain(GUIEnvSetup):
 
     def _start_stop_metric_dashboard(self, start: bool = False):
         monitors = [
-            self._get_framework_monitor(),
-            self.process_monitor
+            self.process_monitor,
+            self.fw_monitor,
+            self.pika_monitor
         ]
 
         for monitor in monitors:
@@ -888,7 +904,11 @@ class GUIMain(GUIEnvSetup):
 
     def get_selected_framework_name(self) -> Optional[str]:
         """Get the selected framework name."""
-        return self.widgets["framework"].value
+        try:
+            fw_name = self.widgets["framework"].value
+        except:
+            fw_name = self._default_framework
+        return fw_name
 
     def get_selected_workers(self) -> List[str]:
         """Get the selected worker hosts."""

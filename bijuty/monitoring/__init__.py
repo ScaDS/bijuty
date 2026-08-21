@@ -9,6 +9,7 @@ from .dashboard import MetricDashboard
 from .spark import SparkMetricCollector, SparkMetricMonitor, SparkMetricsSnapshot, SparkMetricsHistory
 from .flink import FlinkMetricCollector, FlinkMetricMonitor, FlinkMetricsSnapshot, FlinkMetricsHistory
 from .process import ProcessMonitor, ProcessMetricsSnapshot, ProcessMetricsHistory
+from .pika import PikaClientLite, PikaMetricMonitor
 
 __all__ = [
     # dashboard
@@ -27,4 +28,7 @@ __all__ = [
     "ProcessMonitor",
     "ProcessMetricsSnapshot",
     "ProcessMetricsHistory",
+    # pika
+    "PikaClientLite",
+    "PikaMetricMonitor",
 ]
