@@ -16,7 +16,7 @@ BiJuTy (pronounced BYOO-tee) is an interactive Jupyter Notebook-based framework 
 Install the package directly from GitHub inside a Jupyter notebook cell:
 
 ```python
-!pip install git+https://github.com/ScaDS/bijuty.git
+!pip install https://github.com/ScaDS/bijuty/archive/refs/heads/main.zip
 ```
 
 Or install from a local clone:
