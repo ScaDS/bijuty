@@ -1,13 +1,6 @@
-"""
-HTML content generators for visualization components.
-
-This module provides helpers that produce HTML strings used by the GUI to
-render headers, cards, and the resource-allocation tree.
-"""
-
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
 from ..slurm_utils import SlurmManager
 
@@ -19,8 +12,8 @@ class HTMLGenerator:
     def generate_header(title: str) -> str:
         """Generate HTML header with title."""
         return f"""
-        <div style="display: flex; justify-content: center; align-items: center; margin-top: 0px;">
-          <h2 style="color: #0f2d56; text-align: center;">{title}</h2>
+        <div class="gui-header">
+          <h2 class="gui-header-title">{title}</h2>
         </div>
         """
 
@@ -33,17 +26,9 @@ class HTMLGenerator:
         color: str = "#016652",
         is_root: bool = True,
     ) -> str:
-        """
-        Generates a hierarchical, recursive HTML visualization for Slurm Jobs,
-        Nodes, and Processes.
+        """Generates a hierarchical, recursive HTML visualization for Slurm Jobs,
+        Nodes, and Processes."""
 
-        :param title: The title of the card (e.g. 'Slurm Job', 'Node 01')
-        :param card_type: The badge text (e.g. 'Physical Node', 'Process')
-        :param resources: Resource description string (e.g. 'Cores: 8 | Memory: 16384 MB')
-        :param children: A list of dicts, where each dict represents a child card structure.
-        :param color: Base color (CSS-compatible value, e.g. hex '#016652' or name 'teal').
-        :param is_root: Private flag to manage recursive rendering and base CSS styling.
-        """
         if children is None:
             children = []
 
@@ -92,11 +77,11 @@ class HTMLGenerator:
         props: Dict[str, str],
         slurm_info: SlurmManager,
     ) -> str:
-        slurm_cpu_per_node = slurm_info.get_cpus_per_node()
-        slurm_cpu_total = slurm_info.get_total_cpus()
-        slurm_mem_per_node = slurm_info.get_memory_per_node()
-        slurm_mem_total = slurm_info.get_total_memory()
-        slurm_node_list = slurm_info.get_nodes_list()
+        slurm_cpu_per_node = slurm_info.resources.cpus_per_node
+        slurm_cpu_total = slurm_info.resources.total_cpus
+        slurm_mem_per_node = slurm_info.resources.memory_per_node_effective
+        slurm_mem_total = slurm_info.resources.total_memory
+        slurm_node_list = slurm_info.resources.node_list
         slurm_children = []
         master_node = props.get("master_node", slurm_node_list[0])
         coordinator_cores = props.get("drv_cpu_val")
@@ -167,7 +152,7 @@ class HTMLGenerator:
     def generate_ssh_instructions(ssh_cmd: str) -> str:
         """Generate HTML for SSH port-forwarding instructions."""
         return f"""
-        <div style="padding:5px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-size:12px;width:70%;justify-content:center;margin: auto auto">
+        <div style="padding:5px; background:#fffbea; border:1px solid #f0c36d; border-radius:4px; color:#5f4b32; font-size:12px;width:80%;justify-content:center;margin: auto auto">
           <b>Remote environment detected: </b> If above links do not open in your local browser, set up SSH port forwarding.
           <pre style="background:#f7f7f7; padding:5px; margin:0px 0; font-family:monospace;font-size:12px;">{ssh_cmd}</pre>
         </div>

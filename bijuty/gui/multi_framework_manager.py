@@ -55,6 +55,7 @@ class MultiFrameworkManager:
             children=[self._wrap_tab(gui.main_container)],
             layout=widgets.Layout(width="98%", height="auto"),
         )
+        self._tabs.add_class("gui-tabs")
         self._set_tab_title(0, "Cluster 1")
 
         # Side controls: add / close

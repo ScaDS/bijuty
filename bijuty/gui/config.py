@@ -25,17 +25,10 @@ COLOR_SCHEME = {
     "worker_dark": "#4caf50",
 }
 
-DEFAULT_LABEL_STYLE = {
-    "font_weight": "bold",
-    "color": "#333333",
-    "font_size": "14px",
-    "description_width": "200px",
-}
-
-
 # =============================================================================
 # Data Classes
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class FrameworkConfig:
@@ -47,15 +40,18 @@ class FrameworkConfig:
     logo_url: str
     worker_file: str
     default_master_port: int
+    rest_api_port: int
     default_resources: Optional[Dict[str, int]] = None
     proc_other: Optional[List[str]] = None
     web_ui_links: Optional[List[Tuple[str, str]]] = None
+
     """List of (port, title) tuples for framework web UIs."""
 
     @property
     def default_template(self) -> str:
         return os.path.join(
-            os.path.dirname(__file__), "..", "framework_template", self.name_lower
+            os.path.dirname(
+                __file__), "..", "framework_template", self.name_lower
         )
 
     @property
@@ -109,12 +105,15 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
         },
         proc_other=[
             {"title": "SparkSubmit", "pattern": "org.apache.spark.deploy.SparkSubmit"},
-            {"title": "Executor", "pattern": "org.apache.spark.executor.CoarseGrainedExecutorBackend"},
-            {"title": "Scheduler", "pattern": "org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend"},
+            {"title": "Executor",
+                "pattern": "org.apache.spark.executor.CoarseGrainedExecutorBackend"},
+            {"title": "Scheduler",
+                "pattern": "org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend"},
         ],
         logo_url="https://spark.apache.org/images/spark-logo-back.png",
         worker_file="workers",
         default_master_port=7077,
+        rest_api_port=8080,
         default_resources={
             "mem_driver": 1000,
             "mem_worker": 1000,
@@ -140,11 +139,13 @@ FRAMEWORK_REGISTRY: Dict[str, FrameworkConfig] = {
             "pattern": "org.apache.flink.runtime.taskexecutor.TaskManagerRunner"
         },
         proc_other=[
-            {"title": "TaskManager", "pattern": "org.apache.flink.runtime.taskexecutor.TaskManagerRunner"},
+            {"title": "TaskManager",
+                "pattern": "org.apache.flink.runtime.taskexecutor.TaskManagerRunner"},
         ],
         logo_url="https://flink.apache.org/img/logo/png/200/flink_squirrel_200_color.png",
         worker_file="workers",
         default_master_port=6123,
+        rest_api_port=8081,
         default_resources={
             "mem_driver": 1000,
             "mem_worker": 1000,

@@ -17,7 +17,6 @@ import requests
 from ..gui.widgets import WidgetFactory
 from .dashboard import MetricDashboard
 from ..slurm_utils import SlurmManager
-from ..utils import debug_write_to_file
 
 # =============================================================================
 # Constants

@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 import io
 from contextlib import redirect_stdout, redirect_stderr
 import logging
+import time
 
 import ipywidgets as widgets
 from IPython.display import clear_output, display
@@ -33,7 +34,8 @@ from ..slurm_utils import SlurmManager
 from ..monitoring.process import ProcessMonitor
 from ..monitoring.spark import SparkMetricMonitor
 from ..monitoring.flink import FlinkMetricMonitor
-from ..utils import get_file_content
+from ..monitoring.pika import PikaMetricMonitor
+from ..utils import get_file_content, find_first_available_port
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +43,10 @@ logger = logging.getLogger(__name__)
 # Main GUI Class
 # =============================================================================
 
+
 class GUIMain(GUIEnvSetup):
     """
     GUI utilities for configuring and managing big data frameworks.
-
-    This class provides an interactive Jupyter notebook interface for:
-    - Selecting big data frameworks (Spark, Flink)
-    - Configuring cluster resources (CPU, Memory)
-    - Visualizing resource allocation
-    - Starting and stopping clusters
     """
 
     def __init__(self, default_framework: str | None = None):
@@ -61,11 +58,6 @@ class GUIMain(GUIEnvSetup):
         self.is_config_set = False
         self.user = os.environ.get("USER", "unknown")
         self.cluster_name = socket.getfqdn().strip()
-
-        # Initialize managers
-        self.slurm_info = SlurmManager()
-        self.bdm = BigDataManager()
-        self.process_monitor = ProcessMonitor(slurm_info=self.slurm_info)
 
         # Widget containers
         self.widgets: Dict[str, Any] = {}
@@ -80,10 +72,12 @@ class GUIMain(GUIEnvSetup):
         # Default framework override
         self._default_framework = default_framework
 
-        # Debug flag
-        self._debug_set_slurm_true = False
-        if self._debug_set_slurm_true:
-            self.slurm_info.in_slurm_job = True
+        # Initialize managers
+        self.slurm_info = SlurmManager(allow_outside_job=True)
+        self.bdm = BigDataManager(slurm_info=self.slurm_info)
+        self.process_monitor = ProcessMonitor(slurm_info=self.slurm_info)
+        self.fw_monitor = self._get_framework_monitor()
+        self.pika_monitor = self._get_pika_monitor()
 
     def _get_spark_monitor(self) -> SparkMetricMonitor:
         if not hasattr(self, "_spark_monitor"):
@@ -92,38 +86,33 @@ class GUIMain(GUIEnvSetup):
 
     def _get_flink_monitor(self) -> FlinkMetricMonitor:
         if not hasattr(self, "_flink_monitor"):
-            self._flink_monitor = FlinkMetricMonitor()
+            self._flink_monitor = FlinkMetricMonitor(
+                slurm_info=self.slurm_info)
         return self._flink_monitor
+
+    def _get_pika_monitor(self) -> PikaMetricMonitor:
+        if not hasattr(self, "_pika_monitor"):
+            self._pika_monitor = PikaMetricMonitor(
+                base_url=os.environ.get("PIKA_BASE_URL"),
+                token=os.environ.get("PIKA_TOKEN"),
+                slurm_info=self.slurm_info,
+            )
+        return self._pika_monitor
 
     def _get_framework_monitor(self):
         fw_name = self.get_selected_framework_name()
+
         if fw_name and fw_name.lower() == "flink":
             return self._get_flink_monitor()
         return self._get_spark_monitor()
-
-    def _update_metric_dashboard_widget(self) -> None:
-        md = self.widgets.get("metric_dashboard")
-        if md is not None:
-            fw_monitor = self._get_framework_monitor()
-            children = list(md.children)
-            if len(children) >= 4:
-                children[3] = fw_monitor.get_ui()
-                md.children = tuple(children)
 
     # =========================================================================
     # Public API
     # =========================================================================
 
     def launch_gui_config(self, display_gui: bool = True) -> VBox:
-        """Launch the main configuration GUI.
+        """Launch the main configuration GUI."""
 
-        Args:
-            display_gui: If True, automatically display the GUI. If False,
-                build and store the widget without displaying it.
-
-        Returns:
-            The top-level VBox widget containing the full GUI.
-        """
         self._create_widgets()
         self._attach_widget_observers()
         self._setup_visualization_triggers()
@@ -133,27 +122,22 @@ class GUIMain(GUIEnvSetup):
             display(self.main_container)
         return self.main_container
 
-    def update_process_viz(self, change: Optional[Any] = None) -> None:
+    def _update_process_viz(self, change: Optional[Any] = None) -> None:
         """Update the process visualization display."""
         try:
             props = self._get_viz_proportions()
-            html_template = HTMLGenerator.generate_viz_template(props, self.slurm_info)
+            html_template = HTMLGenerator.generate_viz_template(
+                props, self.slurm_info)
             self.wdg_viz_display.value = html_template
         except Exception as e:
             self.wdg_viz_display.value = f"<div style='color: red;'>Error: {str(e)}</div>"
 
     def _log(self, message: str = "", msg_type: str = "info", wrap_function_stdout: bool = False, func: callable = None) -> None:
-        """Log a message to the output area.
-
-        Args:
-            message: The message to log.
-            msg_type: The type of message - "info", "error", or "debug".
-            wrap_function_stdout: To output all stdout/stderr of the called function.
-            func: The function to execute and capture output from (used with wrap_function_stdout=True).
-        """
+        """Log a message to the output area."""
         if wrap_function_stdout:
             if func is None:
-                raise ValueError("func must be provided when wrap_function_stdout=True")
+                raise ValueError(
+                    "func must be provided when wrap_function_stdout=True")
 
             stdout_capture = io.StringIO()
             stderr_capture = io.StringIO()
@@ -183,14 +167,15 @@ class GUIMain(GUIEnvSetup):
         """Set up the environment when the load button is clicked."""
         self._log("Load button clicked!", "debug")
 
-        #self._set_load_button_processing()
-
-        #self.widgets["output_area"].clear_output()
-        self._log(f"Setting environment for {self.get_selected_framework_name()}...")
+        # self._set_load_button_processing()
+        # self.widgets["output_area"].clear_output()
+        self._log(
+            f"Setting environment for {self.get_selected_framework_name()}...")
 
         try:
             self._initialize_framework_config()
-            self._update_environment(fw_name=self.get_selected_framework_name())
+            self._update_environment(
+                fw_name=self.get_selected_framework_name())
             self._initialize_big_data_manager()
             self._reinitalize_dashboard()
         except Exception as e:
@@ -199,10 +184,11 @@ class GUIMain(GUIEnvSetup):
         #     self.widgets["load_button"].disabled = False
 
     def _reinitalize_dashboard(self) -> None:
-        self.process_monitor.set_process_names(self.bdm.get_fw_cluster_processes(all_procs=True))
-        fw_monitor = self._get_framework_monitor()
-        fw_monitor.set_monitor(user_input=self.bdm._user_inputs)
-        self._update_metric_dashboard_widget()
+        self.process_monitor.set_process_names(
+            self.bdm.get_fw_cluster_processes(all_procs=True))
+        self.fw_monitor = self._get_framework_monitor()
+        self.fw_monitor.set_monitor(user_input=self.bdm._user_inputs)
+        # self._update_metric_dashboard_widget()
 
     # =========================================================================
     # Properties
@@ -220,8 +206,10 @@ class GUIMain(GUIEnvSetup):
 
     def _create_widgets(self) -> None:
         """Create all GUI widgets."""
-        self.widgets["header_config"] = self._create_header("Cluster Configurator")
-        self.widgets["header_viz"] = self._create_header("Resource Allocation Overview")
+        self.widgets["header_config"] = self._create_header(
+            "Cluster Configurator")
+        self.widgets["header_viz"] = self._create_header(
+            "Resource Allocation Overview")
 
         self.widgets["framework"] = self._create_framework_widget()
         self.widgets["logo"] = self._create_logo_widget()
@@ -242,7 +230,6 @@ class GUIMain(GUIEnvSetup):
         self.widgets["executor_memory"] = self._create_executor_memory_widget()
 
         self.widgets["randomize_port"] = self._create_randomize_port_widget()
-        # self.widgets["load_button"] = self._create_load_button()
         self.widgets["output_area"] = self._create_output_area()
 
         self.widgets["start_cluster"] = self._create_start_cluster_button()
@@ -250,17 +237,11 @@ class GUIMain(GUIEnvSetup):
 
         self.widgets["metric_dashboard"] = self._create_metric_dashboard()
         self.widgets["framework_gui"] = self._create_framework_web_gui()
-        self.widgets["cluster_info"] = self._create_cluster_info_widget()
+        # Template initialization; will be filled later
+        self.widgets["cluster_info"] = widgets.HTML()
 
     def _create_framework_web_gui(self) -> HBox:
-        """Create a panel with simple buttons to open framework web UIs.
-
-        When running remotely, displays SSH port-forwarding instructions so the
-        user can open the links in a local browser.
-
-        Returns:
-            A VBox widget containing buttons and optional port-forward instructions.
-        """
+        """Create a panel with simple buttons to open framework web UIs."""
         fw_name = self.get_selected_framework_name()
         base_url = f"http://localhost"
         is_remote = self.slurm_info.in_slurm_job
@@ -272,10 +253,11 @@ class GUIMain(GUIEnvSetup):
 
         def make_link_row(url: str, title: str) -> VBox:
             btn_widget = WidgetFactory.create_styled_button_redirect(
-                description=f"Open {title}",
+                description=f"{title}",
                 url=url,
             )
-            btn_widget = WidgetFactory.update_widget_state(btn_widget,disable=True)
+            btn_widget = WidgetFactory.update_widget_state(
+                btn_widget, disable=True)
 
             return btn_widget
         if web_ui_links:
@@ -296,22 +278,19 @@ class GUIMain(GUIEnvSetup):
             )
             ssh_cmd = f"ssh {self.slurm_info.user}@{self.slurm_info.login_node} {ssh_parts} <jump-host>"
 
-            instructions_html = HTMLGenerator.generate_ssh_instructions(ssh_cmd)
+            instructions_html = HTMLGenerator.generate_ssh_instructions(
+                ssh_cmd)
             instructions_widget = widgets.HTML(value=instructions_html)
-            instructions_widget = WidgetFactory.update_widget_state(instructions_widget,disable=True)
+            instructions_widget = WidgetFactory.update_widget_state(
+                instructions_widget, disable=True)
+        else:
+            instructions_widget = widgets.HTML(value="")
 
-        return VBox(
-            [
-                # self._create_header("Framework Web Interface"),
-                widgets.HBox(rows, layout=widgets.Layout(width="100%", padding="8px", align_items="center", justify_content="center")),
-                instructions_widget
-
-            ],layout=widgets.Layout(width="50%", padding="8px")
-        )
-
-    def _create_cluster_info_widget(self) -> widgets.HTML:
-        """Create an empty widget displaying current master and worker nodes."""
-        return widgets.HTML()
+        rows_box = HBox(rows)
+        rows_box.add_class("web-gui-rows")
+        container = VBox([rows_box, instructions_widget])
+        container.add_class("web-gui-container")
+        return container
 
     def _update_cluster_info(self, change: Optional[Any] = None) -> None:
         """Update the cluster info widget with current master, worker nodes and status."""
@@ -338,8 +317,6 @@ class GUIMain(GUIEnvSetup):
                 is_config_set=self.is_config_set,
             )
 
-
-
     def _create_header(self, title: str) -> widgets.HTML:
         """Create the GUI header widget."""
         return widgets.HTML(HTMLGenerator.generate_header(title))
@@ -347,7 +324,8 @@ class GUIMain(GUIEnvSetup):
     def _create_framework_widget(self) -> widgets.Dropdown:
         """Create the framework selection widget."""
         framework_list = list(FRAMEWORK_REGISTRY.keys())
-        default_value = self._default_framework if self._default_framework in framework_list else framework_list[0]
+        default_value = self._default_framework if self._default_framework in framework_list else framework_list[
+            0]
         return WidgetFactory.create_dropdown(
             options=framework_list,
             value=default_value,
@@ -364,14 +342,9 @@ class GUIMain(GUIEnvSetup):
             logo_url = self.selected_framework.logo_url
             img_content = fetch_image(logo_url)
 
-            return widgets.Image(
-                value=img_content,
-                # format="svg+xml",
-                width=50,
-                height=50,
-            )
+            return widgets.Image(value=img_content, width=50, height=50)
         except Exception as e:
-            self._log(f"Error loading logo: {e}",msg_type="error")
+            self._log(f"Error loading logo: {e}", msg_type="error")
             return create_placeholder_logo()
 
     def _create_framework_home_widget(self) -> VBox:
@@ -428,7 +401,7 @@ class GUIMain(GUIEnvSetup):
 
     def _create_master_host_widget(self) -> widgets.Dropdown:
         """Create the master host selection widget."""
-        nodes = self.slurm_info.get_nodes_list()
+        nodes = self.slurm_info.resources.node_list
         return WidgetFactory.create_dropdown(
             options=nodes,
             value=nodes[0] if nodes else None,
@@ -437,7 +410,7 @@ class GUIMain(GUIEnvSetup):
 
     def _create_worker_hosts_widget(self) -> VBox:
         """Create the worker host selection widget."""
-        node_options = self.slurm_info.get_nodes_list()
+        node_options = self.slurm_info.resources.node_list
         checkboxes = [
             widgets.Checkbox(value=False, description=node, indent=False)
             for node in node_options
@@ -447,19 +420,20 @@ class GUIMain(GUIEnvSetup):
 
         checkbox_container = VBox(
             checkboxes,
-            layout=widgets.Layout(max_height="200px", overflow_y="auto", border="1px solid #ddd")
+            layout=widgets.Layout(max_height="200px",
+                                  overflow_y="auto", border="1px solid #ddd")
         )
 
         label = widgets.HTML(value="<b>Worker Hosts:</b>")
         selected_display = widgets.HTML(value="<i>None selected</i>")
 
-        def update_selection(change: Dict[str, Any]) -> None:
+        def _update_selection(change: Dict[str, Any]) -> None:
             selected = [cb.description for cb in checkboxes if cb.value]
             selected_display.value = f"<b>Selected:</b> {', '.join(selected) if selected else '<i>None</i>'}"
-            self.update_process_viz() # Trigger added to update process vizualization
+            self._update_process_viz()  # Trigger added to update process vizualization
 
         for cb in checkboxes:
-            cb.observe(update_selection, names="value")
+            cb.observe(_update_selection, names="value")
 
         return VBox([label, checkbox_container, selected_display])
 
@@ -467,14 +441,15 @@ class GUIMain(GUIEnvSetup):
         """Create the driver CPU slider widget."""
         fw_name = self.get_selected_framework_name() or "SPARK"
         try:
-            default_cpu_worker = FRAMEWORK_REGISTRY[fw_name].default_resources.get("cpu_worker", 1)
+            default_cpu_worker = FRAMEWORK_REGISTRY[fw_name].default_resources.get(
+                "cpu_worker", 1)
         except:
             default_cpu_worker = 1
 
         return WidgetFactory.create_slider(
             value=1,
             min_val=1,
-            max_val=self.slurm_info.get_cpus_per_node() - default_cpu_worker,
+            max_val=self.slurm_info.resources.cpus_per_node - default_cpu_worker,
             description="Coordinator Cores:",
         )
 
@@ -483,7 +458,7 @@ class GUIMain(GUIEnvSetup):
         return WidgetFactory.create_slider(
             value=1,
             min_val=1,
-            max_val=self.slurm_info.get_cpus_per_node() - self.get_selected_driver_cpu(),
+            max_val=self.slurm_info.resources.cpus_per_node - self.get_selected_driver_cpu(),
             description="Cores Pool / Node:",
             tooltip='The number of CPU cores assigned to each node. This determines maximum cores to be made available for compute units on one node.\n- Spark: SPARK_WORKER_CORES\n- Flink: taskmanager.cpu.cores',
         )
@@ -510,7 +485,7 @@ class GUIMain(GUIEnvSetup):
         return WidgetFactory.create_slider(
             value=value,
             min_val=value,
-            max_val=self.slurm_info.get_memory_per_node() - mem_worker,
+            max_val=self.slurm_info.resources.memory_per_node_effective - mem_worker,
             step=128,
             description="Coordinator Memory (MB):",
         )
@@ -518,12 +493,14 @@ class GUIMain(GUIEnvSetup):
     def _create_worker_memory_widget(self) -> widgets.IntSlider:
         """Create the worker memory slider widget."""
         fw_name = self.get_selected_framework_name() or "SPARK"
-        value = FRAMEWORK_REGISTRY[fw_name].default_resources.get("mem_driver", 1000)
+        value = FRAMEWORK_REGISTRY[fw_name].default_resources.get(
+            "mem_driver", 1000)
 
         return WidgetFactory.create_slider(
             value=value,
             min_val=value,
-            max_val=self.slurm_info.get_memory_per_node() - self.get_selected_driver_memory_val(),
+            max_val=self.slurm_info.resources.memory_per_node_effective -
+            self.get_selected_driver_memory_val(),
             step=128,
             description="Memory Pool / Node (MB):",
         )
@@ -531,7 +508,8 @@ class GUIMain(GUIEnvSetup):
     def _create_executor_memory_widget(self) -> widgets.IntSlider:
         """Create the executor memory slider widget."""
         fw_name = self.get_selected_framework_name() or "SPARK"
-        value = FRAMEWORK_REGISTRY[fw_name].default_resources.get("mem_driver", 1000)
+        value = FRAMEWORK_REGISTRY[fw_name].default_resources.get(
+            "mem_driver", 1000)
 
         return WidgetFactory.create_slider(
             value=value,
@@ -552,9 +530,9 @@ class GUIMain(GUIEnvSetup):
         """Create the start cluster button widget."""
         button = WidgetFactory.create_styled_button(
             description="Start Cluster",
-            layout_overrides={"width": "40%", "color": "white"},
+            layout_overrides={"width": "40%"},
         )
-        # button.disabled = not self.is_config_set
+        button.add_class("gui-button-start")
         button.disabled = False
         button.on_click(self._on_start_cluster_clicked)
         return button
@@ -563,39 +541,32 @@ class GUIMain(GUIEnvSetup):
         """Create the stop cluster button widget."""
         button = WidgetFactory.create_styled_button(
             description="Stop Cluster",
-            style_overrides={"button_color": "red", "color": "white"},
             layout_overrides={"width": "40%"},
         )
+        button.add_class("gui-button-stop")
         button.disabled = not self.is_config_set
         button.on_click(self._on_stop_cluster_clicked)
         return button
 
     def _create_metric_dashboard(self) -> widgets.Box:
         """Create the metric dashboard widget."""
-        fw_monitor = self._get_framework_monitor()
+        # fw_monitor = self._get_framework_monitor()
         return widgets.VBox(
             [
                 widgets.HTML("<div>Process Metrics</div>"),
                 self.process_monitor.get_ui(),
                 widgets.HTML("<div>Framework Metrics</div>"),
-                fw_monitor.get_ui(),
+                self.fw_monitor.get_ui(),
+                widgets.HTML("<div>Pika Cluster Metrics</div>"),
+                self.pika_monitor.get_ui(),
             ]
         )
 
     def _create_output_area(self) -> widgets.Output:
-        output_widget = widgets.Output(
-            layout=widgets.Layout(
-                height="200px",
-                max_height="200px",
-                overflow="auto",
-                border="2px solid #555555",
-            )
-        )
+        output_widget = widgets.Output()
         # Add custom class for CSS targeting
         output_widget.add_class("log")
-        output_widget.add_class("id-log")
         return output_widget
-
 
     # =========================================================================
     # Event Handlers
@@ -624,7 +595,8 @@ class GUIMain(GUIEnvSetup):
             widget.observe(self._on_parameters_changed, names="value")
 
         # Observers to refresh cluster info label
-        self.widgets["master_host"].observe(self._update_cluster_info, names="value")
+        self.widgets["master_host"].observe(
+            self._update_cluster_info, names="value")
         for cb in self.widgets["worker_hosts"].children[1].children:
             cb.observe(self._update_cluster_info, names="value")
 
@@ -635,19 +607,24 @@ class GUIMain(GUIEnvSetup):
         """Set up dynamic widget range interdependencies."""
         # CPU ranges
         self.widgets["worker_cpu"].max = (
-            self.slurm_info.get_cpus_per_node() - self.get_selected_driver_cpu()
+            self.slurm_info.resources.cpus_per_node - self.get_selected_driver_cpu()
         )
-        self.widgets["driver_cpu"].observe(self._update_worker_cpu_range, names="value")
+        self.widgets["driver_cpu"].observe(
+            self._update_worker_cpu_range, names="value")
 
         self.widgets["executor_cpu"].max = self.widgets["worker_cpu"].value
-        self.widgets["worker_cpu"].observe(self._update_executor_cpu_range, names="value")
+        self.widgets["worker_cpu"].observe(
+            self._update_executor_cpu_range, names="value")
 
         # Memory ranges
         self.widgets["worker_memory"].max = (
-            self.slurm_info.get_memory_per_node() - self.get_selected_driver_memory_val()
+            self.slurm_info.resources.memory_per_node_effective -
+            self.get_selected_driver_memory_val()
         )
-        self.widgets["driver_memory"].observe(self._update_worker_memory_max, names="value")
-        self.widgets["worker_memory"].observe(self._update_executor_memory_max, names="value")
+        self.widgets["driver_memory"].observe(
+            self._update_worker_memory_max, names="value")
+        self.widgets["worker_memory"].observe(
+            self._update_executor_memory_max, names="value")
 
     def _setup_visualization_triggers(self) -> None:
         """Set up widgets that trigger visualization updates."""
@@ -663,10 +640,10 @@ class GUIMain(GUIEnvSetup):
         ]
 
         for widget in trigger_widgets:
-            widget.observe(self.update_process_viz, names="value")
+            widget.observe(self._update_process_viz, names="value")
 
         # Initial visualization
-        self.update_process_viz()
+        self._update_process_viz()
 
     def _on_parameters_changed(self, change: Dict[str, Any]) -> None:
         """Handle parameter changes."""
@@ -674,12 +651,11 @@ class GUIMain(GUIEnvSetup):
         self._update_framework_home_labels(change)
         fw_logo_wdg = self.widgets["logo"]
         fw_logo_wdg.value = self._create_logo_widget().value
-        if change.get("owner") is self.widgets.get("framework"):
-            self._update_metric_dashboard_widget()
+        self._update_framework_webgui_container()
 
     def _update_worker_cpu_range(self, change: Dict[str, Any]) -> None:
         """Update worker CPU range based on driver CPU."""
-        self.widgets["worker_cpu"].max = self.slurm_info.get_cpus_per_node() - change["new"]
+        self.widgets["worker_cpu"].max = self.slurm_info.resources.cpus_per_node - change["new"]
 
     def _update_executor_cpu_range(self, change: Dict[str, Any]) -> None:
         """Update executor CPU range based on worker CPU."""
@@ -688,7 +664,7 @@ class GUIMain(GUIEnvSetup):
     def _update_worker_memory_max(self, change: Dict[str, Any]) -> None:
         """Update worker memory max based on driver memory."""
         self.widgets["worker_memory"].max = (
-            self.slurm_info.get_memory_per_node() - change["new"]
+            self.slurm_info.resources.memory_per_node_effective - change["new"]
         )
 
     def _update_executor_memory_max(self, change: Dict[str, Any]) -> None:
@@ -696,36 +672,64 @@ class GUIMain(GUIEnvSetup):
         tmp = change["new"]
         self.widgets["executor_memory"].max = tmp
 
+    def _start_stop_metric_dashboard(self, start: bool = False):
+        monitors = [
+            self.process_monitor,
+            self.fw_monitor,
+            self.pika_monitor
+        ]
+
+        for monitor in monitors:
+            if monitor is not None:
+                button = monitor._btn_start if start else monitor._btn_stop
+                button.click()
+
     def _on_start_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle start cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
+        self.row1.children[0].disable()
         try:
             with self.widgets["output_area"]:
                 self._set_environment()
                 self._last_cluster_result = self.bdm.start_cluster()
+            self._toggle_cluster_buttons(
+                start_disabled=True, stop_disabled=False
+            )
             self._toggle_framework_gui(disabled=False)
             self.row3.enable()
-            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+            self._start_stop_metric_dashboard(start=True)
             self._toggle_framework_gui(disabled=False)
         except Exception as e:
             tb = traceback.format_exc()
-            self._log(f"Failed to start cluster:{e}\n{tb}",msg_type="error")
-            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+            self._log(f"Failed to start cluster:{e}\n{tb}", msg_type="error")
+            self.row1.children[0].enable()
+            self._toggle_cluster_buttons(
+                start_disabled=False, stop_disabled=True
+            )
+            self._start_stop_metric_dashboard(start=False)
         self._update_cluster_info()
 
     def _on_stop_cluster_clicked(self, _: widgets.Button) -> None:
         """Handle stop cluster button click."""
         self._toggle_cluster_buttons(all_disabled=True)
+        self.row1.children[0].disable()
         try:
-            #self._last_cluster_result = self._log(wrap_function_stdout=True, func=self.bdm.stop_cluster)
+            # self._last_cluster_result = self._log(wrap_function_stdout=True, func=self.bdm.stop_cluster)
             with self.widgets["output_area"]:
                 self._last_cluster_result = self.bdm.stop_cluster()
-                self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
-                self._toggle_framework_gui(disabled=True)
+                self._toggle_cluster_buttons(
+                    start_disabled=False, stop_disabled=True
+                )
                 self.row3.disable()
+                self._start_stop_metric_dashboard(start=False)
+                self.row1.children[0].enable()
+                self._toggle_framework_gui(disabled=True)
         except Exception as e:
-            self._log(f"Failed to stop cluster:{e}",msg_type="error")
-            self._toggle_cluster_buttons(start_disabled=True, stop_disabled=False)
+            self._log(f"Failed to stop cluster:{e}", msg_type="error")
+            self._toggle_cluster_buttons(
+                start_disabled=True, stop_disabled=False
+            )
+            self.row1.children[0].disable()
         self._update_cluster_info()
 
     def _toggle_cluster_buttons(
@@ -738,18 +742,17 @@ class GUIMain(GUIEnvSetup):
         if all_disabled is not None:
             self.widgets["start_cluster"].disabled = all_disabled
             self.widgets["stop_cluster"].disabled = all_disabled
-            return
+        else:
+            if start_disabled is not None:
+                self.widgets["start_cluster"].disabled = start_disabled
+            if stop_disabled is not None:
+                self.widgets["stop_cluster"].disabled = stop_disabled
 
-        if start_disabled is not None:
-            self.widgets["start_cluster"].disabled = start_disabled
-        if stop_disabled is not None:
-            self.widgets["stop_cluster"].disabled = stop_disabled
-
-    def _toggle_framework_gui(self,disabled: bool) -> None:
-        # """Toggle cluster button states."""
+    def _toggle_framework_gui(self, disabled: bool) -> None:
+        """Toggle cluster button states."""
         fw_gui_btns = self.widgets["framework_gui"].children[0]
         for wdg_i in fw_gui_btns.children:
-            wdg_i = WidgetFactory.update_widget_state(wdg_i,disable=disabled)
+            wdg_i = WidgetFactory.update_widget_state(wdg_i, disable=disabled)
         if disabled:
             self.widgets["framework_gui"].disable()
         else:
@@ -764,12 +767,20 @@ class GUIMain(GUIEnvSetup):
             if framework_home_widget and len(framework_home_widget.children) >= 2:
                 checkbox = framework_home_widget.children[0]
                 path_input = framework_home_widget.children[1]
-
                 # Update checkbox description
                 checkbox.update_label(f"Use custom {fw_name}_HOME")
-
         except Exception as e:
             logger.error(e)
+
+    def _update_framework_webgui_container(self):
+        new_gui = self._create_framework_web_gui()
+        self.widgets["framework_gui"] = new_gui
+        cluster_widget = self.widgets.get("cluster_widget")
+        if cluster_widget is not None:
+            children = list(cluster_widget.children)
+            if len(children) >= 3:
+                children[2] = new_gui
+                cluster_widget.children = tuple(children)
 
     # =========================================================================
     # GUI Assembly
@@ -780,95 +791,51 @@ class GUIMain(GUIEnvSetup):
         config_container = self._create_config_container()
         viz_container = self._create_viz_container()
 
-        self.row1 = widgets.HBox(
-            [config_container, viz_container],
-            layout=widgets.Layout(
-                display="flex",
-                flex_flow="row",
-                width="100%",
-                max_width="100%",
-                overflow="hidden",
-                # height="800px",
-                justify_content="space-around",
-                margin="0px",
-                height="fit-content",
-                max_height="750"
-            ),
-        )
-
-        buttons_box = HBox([
-                self.widgets["start_cluster"],
-                self.widgets["stop_cluster"]
-            ], layout=widgets.Layout(
-                width="80%",
-                justify_content="center",
-                margin="0px auto"
-            ))
-
-        cluster_info_box = VBox(
-            [buttons_box, self.widgets["cluster_info"]],
-            layout=widgets.Layout(width="50%")
-        )
+        self.row1 = HBox([config_container, viz_container])
+        self.row1.add_class("sub-container")
+        self.row1.add_class("sub-container-row1")
 
         cluster_widget = HBox([
-            cluster_info_box,
-            widgets.HTML(value="<div style='border-left: 1px solid #808080; height: 90%; display: inline-block; margin: auto auto;'></div>"),
+            self._create_cluster_info_box(),
+            # Dividing line
+            widgets.HTML(
+                value="<div style='border-left: 1px solid #808080; height: 90%; display: inline-block; margin: auto auto;'></div>"),
             self.widgets["framework_gui"],
-            ]
+        ]
         )
+        self.widgets["cluster_widget"] = cluster_widget
         self._toggle_framework_gui(disabled=True)
 
-        self.row2 = VBox([self._create_header(title="Cluster Management"), cluster_widget],
-            layout=widgets.Layout(
-                display="flex",
-                flex_flow="column",
-                #margin="0px",
-                justify_content="space-around",
-            ),
+        self.row2 = VBox([
+            self._create_header(title="Cluster Management"),
+            cluster_widget]
         )
         self.row2.add_class("sub-container")
 
-
-
-        # self.row3:VBox= VBox([
-        #     self.widgets["framework_gui"],
-        # ])
-        # self.row3.add_class("sub-container")
-
-
-        self.row3:VBox = VBox([
+        self.row3: VBox = VBox([
             self._create_header(title="Performance Metric"),
             self.widgets["metric_dashboard"]
         ])
         self.row3.add_class("sub-container")
         self.row3.disable()
 
-        # Inject CSS for text wrapping in output area
+        # Inject CSS Styling
         html_header_content = f"""
         <style>
         {get_file_content(os.path.join(os.path.dirname(__file__), "..", "style.css"))}
         </style>
-        <script>
-        var el = document.querySelector('.id-log');
-        if (el) el.scrollTop = el.scrollHeight;
-        </script>
         """
 
         self.style_widget = widgets.HTML(value=html_header_content)
 
-        main_container : VBox = VBox(
-            [self.style_widget, self.row1, self.row2,
-            #  self.row3,
-             self.row3, self.widgets["output_area"]],
-            layout=widgets.Layout(
-                display="flex",
-                flex_flow="column",
-                width="100%",
-                max_width="100%"
-            ),
-        )
+        main_container: VBox = VBox([
+            self.style_widget,
+            self.row1,
+            self.row2,
+            self.row3,
+            self.widgets["output_area"]
+        ],)
         main_container.add_class("main-container")
-        main_container.add_class("id-main-container")
         return main_container
 
     def _create_config_container(self) -> VBox:
@@ -892,7 +859,7 @@ class GUIMain(GUIEnvSetup):
         ]
         self.widgets["config_wdg"] = config_widgets
 
-        wdg:VBox = VBox(
+        wdg: VBox = VBox(
             config_widgets,
             layout=widgets.Layout(
                 width="50%",
@@ -911,15 +878,25 @@ class GUIMain(GUIEnvSetup):
             [self.widgets["header_viz"], self.wdg_viz_display],
             layout=widgets.Layout(
                 width="50%",
-                padding="40px",
-                # display="flex",
-                # flex_flow="column",
-                # align_items="stretch"
+                padding="20px",
             ),
         )
         wdg.add_class("sub-container")
         return wdg
 
+    def _create_cluster_info_box(self) -> VBox:
+        buttons_box = HBox([
+            self.widgets["start_cluster"],
+            self.widgets["stop_cluster"]
+        ], layout=widgets.Layout(
+            width="80%",
+            justify_content="center",
+            margin="0px auto"
+        ))
+        return VBox(
+            [buttons_box, self.widgets["cluster_info"]],
+            layout=widgets.Layout(width="50%")
+        )
 
     # =========================================================================
     # Value Getters
@@ -927,7 +904,11 @@ class GUIMain(GUIEnvSetup):
 
     def get_selected_framework_name(self) -> Optional[str]:
         """Get the selected framework name."""
-        return self.widgets["framework"].value
+        try:
+            fw_name = self.widgets["framework"].value
+        except:
+            fw_name = self._default_framework
+        return fw_name
 
     def get_selected_workers(self) -> List[str]:
         """Get the selected worker hosts."""
@@ -939,9 +920,9 @@ class GUIMain(GUIEnvSetup):
         """Get the selected master port."""
         if self.widgets["randomize_port"].value:
             if self.get_selected_framework_name().lower() == "spark":
-                return str(self._find_first_available_port(start_port=7077))
+                return str(find_first_available_port(start_port=7077))
             elif self.get_selected_framework_name().lower() == "flink":
-                return str(self._find_first_available_port(start_port=6123))
+                return str(find_first_available_port(start_port=6123))
         return str(self.selected_framework.default_master_port)
 
     def get_selected_master_host(self) -> str:
@@ -1042,10 +1023,6 @@ class GUIMain(GUIEnvSetup):
                 f"'{self.get_selected_framework_name().upper()}_HOME' environment variable"
             )
 
-    # =========================================================================
-    # Visualization Helpers
-    # =========================================================================
-
     def _get_viz_proportions(self) -> Dict[str, str]:
         """Calculate visualization proportions for resources."""
         # Get resource values
@@ -1058,8 +1035,8 @@ class GUIMain(GUIEnvSetup):
         exe_cpu = float(self.get_selected_executor_cpu())
 
         # Get node capacities
-        node_mem_capacity = self.slurm_info.get_memory_per_node()
-        node_cpu_capacity = self.slurm_info.get_cpus_per_node()
+        node_mem_capacity = self.slurm_info.resources.memory_per_node_effective
+        node_cpu_capacity = self.slurm_info.resources.cpus_per_node
 
         return {
             "master_node": self.get_selected_master_host(),
@@ -1073,34 +1050,3 @@ class GUIMain(GUIEnvSetup):
             "wrk_cpu_val": f"{int(wrk_cpu)}",
             "exe_cpu_val": f"{int(exe_cpu)}",
         }
-
-    # =========================================================================
-    # Environment Setup
-    # =========================================================================
-
-    # def _set_load_button_processing(self) -> None:
-    #     """Set load button to processing state."""
-    #     self.widgets["load_button"].disabled = True
-    #     self.widgets["load_button"].description = "Processing..."
-    #     self.widgets["load_button"].button_style = "warning"
-
-    # =========================================================================
-    # Utility Methods
-    # =========================================================================
-
-    def _find_first_available_port(
-        self,
-        start_port: int = 7077,
-        end_port: int = 9000,
-        host: Optional[str] = None,
-    ) -> int:
-        """Find the first available port in the given range."""
-        host = host or socket.gethostname()
-        for port in range(start_port, end_port + 1):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                try:
-                    sock.bind((host, port))
-                    return port
-                except OSError:
-                    continue
-        raise RuntimeError(f"No available ports found in range {start_port}-{end_port}")

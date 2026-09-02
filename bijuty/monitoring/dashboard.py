@@ -7,6 +7,7 @@ and rolling history tracking.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -49,6 +50,7 @@ class MetricDashboard:
         max_refresh: float = MAX_REFRESH_INTERVAL,
         refresh_step: float = 0.5,
         plot_height: int = PLOT_HEIGHT,
+        max_cols: Optional[int] = None,
         extra_header_widgets: Optional[List[widgets.Widget]] = None,
     ) -> None:
         self.collector = collector
@@ -57,6 +59,7 @@ class MetricDashboard:
         self._max_refresh = max_refresh
         self._refresh_step = refresh_step
         self._plot_height = plot_height
+        self._max_cols = max_cols
         self.running = False
         self._process_plots: Dict[str, Dict[str, Any]] = {}
 
@@ -215,20 +218,28 @@ class MetricDashboard:
     ) -> go.FigureWidget:
         num_metrics = len(active_metrics)
 
+        if self._max_cols and num_metrics > self._max_cols:
+            cols = self._max_cols
+            rows = math.ceil(num_metrics / cols)
+        else:
+            rows = 1
+            cols = max(num_metrics, 1)
+
         fig = make_subplots(
-            rows=1,
-            cols=num_metrics,
+            rows=rows,
+            cols=cols,
             subplot_titles=[self._get_metric_display_name(m) for m in active_metrics],
         )
 
         proc_plot: go.FigureWidget = go.FigureWidget(fig)
-        proc_plot.layout.height = self._plot_height
+        proc_plot.layout.height = self._plot_height * rows
         proc_plot.layout.margin = dict(l=50, r=20, t=50, b=50)
         proc_plot.layout.showlegend = False
         proc_plot.update_layout(autosize=True)
 
         for metric_idx, metric in enumerate(active_metrics):
-            row, col = 1, metric_idx + 1
+            row = (metric_idx // cols) + 1
+            col = (metric_idx % cols) + 1
             base_trace = dict(row=row, col=col, x=[], y=[], mode="lines")
 
             # Main line

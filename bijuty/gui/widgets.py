@@ -14,8 +14,6 @@ import re
 import ipywidgets as widgets
 from traitlets import Bool
 
-from .config import DEFAULT_LABEL_STYLE
-
 
 DEFAULT_WIDGET_LAYOUT = widgets.Layout(
     width="100%",
@@ -24,10 +22,12 @@ DEFAULT_WIDGET_LAYOUT = widgets.Layout(
     flex_flow="row",
 )
 
+DEFAULT_SLIDER_HANDLE_COLOR = "#ffffff00"
 
 # =============================================================================
 # Standalone helpers
 # =============================================================================
+
 
 def fetch_image(url: str) -> bytes:
     """Fetch image content from URL."""
@@ -63,27 +63,14 @@ class WidgetFactory:
         **button_kwargs,
     ) -> widgets.Button:
         """Create a styled button widget."""
-        base_style = {
-            "button_color": "#4caf50",
-            "font_weight": "bold",
-            "font_size": "14px",
-        }
-        base_layout = {
-            "width": "120px",
-            "height": "40px",
-            "margin": "5px",
-            "align_self": "center",
-        }
-
-        final_style = {**base_style, **(style_overrides or {})}
-        final_layout = {**base_layout, **(layout_overrides or {})}
-
-        return widgets.Button(
-            description=description,
-            style=widgets.ButtonStyle(**final_style),
-            layout=widgets.Layout(**final_layout),
-            **button_kwargs,
-        )
+        kwargs: Dict[str, Any] = {**button_kwargs}
+        if style_overrides:
+            kwargs["style"] = widgets.ButtonStyle(**style_overrides)
+        if layout_overrides:
+            kwargs["layout"] = widgets.Layout(**layout_overrides)
+        button = widgets.Button(description=description, **kwargs)
+        button.add_class("gui-button")
+        return button
 
     @staticmethod
     def create_styled_button_redirect(
@@ -94,9 +81,8 @@ class WidgetFactory:
         **button_kwargs,
     ) -> widgets.HTML:
         link_html = f"""
-            <a href="{url}" target="_blank" style="text-decoration:none;">
-                <button class="p-Widget jupyter-widgets jupyter-button widget-button mod-primary"
-                        style="width:160px; height:32px; cursor:pointer;" title="Open {url}">
+            <a href="{url}" target="_blank" class="gui-redirect-link">
+                <button class="gui-redirect-button" title="Open {url}">
                     {description}
                 </button>
             </a>
@@ -109,7 +95,8 @@ class WidgetFactory:
         current_html = widget.value
         clean_html = re.sub(r'\s+disabled(?=[\s>])', '', current_html)
         if disable:
-            new_html = re.sub(r'(<button[^>]*)(>)', r'\1 disabled\2', clean_html)
+            new_html = re.sub(r'(<button[^>]*)(>)',
+                              r'\1 disabled\2', clean_html)
         else:
             new_html = clean_html
         widget.value = new_html
@@ -127,24 +114,27 @@ class WidgetFactory:
         layout: Optional[widgets.Layout] = None,
     ) -> widgets.IntSlider:
         """Create a standardized IntSlider widget."""
-        slider_style = (label_style or {}).copy()
-        slider_style.setdefault("font_weight", "bold")
-        slider_style.setdefault("color", "#333333")
-        slider_style.setdefault("font_size", "14px")
-        slider_style.setdefault("description_width", "200px")
-        slider_style["handle_color"] = "blue"
         if not tooltip:
             tooltip = description
-        return widgets.IntSlider(
+        kwargs: Dict[str, Any] = dict(
             value=value,
             min=min_val,
             max=max_val,
             step=step,
             description=description,
-            style=slider_style,
             layout=layout or DEFAULT_WIDGET_LAYOUT,
             tooltip=tooltip,
         )
+        style = label_style or {}
+        style = {**style, "handle_color": DEFAULT_SLIDER_HANDLE_COLOR}
+        kwargs["style"] = style
+        slider = widgets.IntSlider(**kwargs)
+        if label_style is None:
+            slider.add_class("default-label-style")
+            slider.add_class("slider-style")
+            # for i in [ "slider-track", "ui-slider", "ui-slider-range" ]:
+            #     slider.add_class(i)
+        return slider
 
     @staticmethod
     def create_dropdown(
@@ -155,13 +145,18 @@ class WidgetFactory:
         layout: Optional[widgets.Layout] = None,
     ) -> widgets.Dropdown:
         """Create a standardized Dropdown widget."""
-        return widgets.Dropdown(
+        kwargs: Dict[str, Any] = dict(
             options=options,
             value=value,
             description=description,
-            style=label_style or DEFAULT_LABEL_STYLE,
             layout=layout or DEFAULT_WIDGET_LAYOUT,
         )
+        if label_style is not None:
+            kwargs["style"] = label_style
+        dropdown = widgets.Dropdown(**kwargs)
+        if label_style is None:
+            dropdown.add_class("default-label-style")
+        return dropdown
 
     @staticmethod
     def create_text(
@@ -172,13 +167,18 @@ class WidgetFactory:
         disabled: bool = False,
     ) -> widgets.Text:
         """Create a standardized Text widget."""
-        return widgets.Text(
+        kwargs: Dict[str, Any] = dict(
             value=value,
             description=description,
-            style=label_style or DEFAULT_LABEL_STYLE,
             layout=layout or DEFAULT_WIDGET_LAYOUT,
             disabled=disabled,
         )
+        if label_style is not None:
+            kwargs["style"] = label_style
+        text = widgets.Text(**kwargs)
+        if label_style is None:
+            text.add_class("default-label-style")
+        return text
 
     @staticmethod
     def create_checkbox(
@@ -188,13 +188,18 @@ class WidgetFactory:
         layout: Optional[widgets.Layout] = None,
     ) -> "CustomCheckbox":
         """Create a standardized Checkbox widget."""
-        return CustomCheckbox(
+        kwargs: Dict[str, Any] = dict(
             value=value,
             description=description,
             indent=False,
-            style=label_style or DEFAULT_LABEL_STYLE,
             layout=layout or DEFAULT_WIDGET_LAYOUT,
         )
+        if label_style is not None:
+            kwargs["style"] = label_style
+        checkbox = CustomCheckbox(**kwargs)
+        if label_style is None:
+            checkbox.add_class("default-label-style")
+        return checkbox
 
 
 # =============================================================================
@@ -240,7 +245,8 @@ class CustomCheckbox(widgets.HBox):
     value = Bool(False).tag(sync=True)
 
     def __init__(self, description="Label", value=False, **kwargs):
-        self._checkbox: widgets.Checkbox = widgets.Checkbox(value=value, indent=False)
+        self._checkbox: widgets.Checkbox = widgets.Checkbox(
+            value=value, indent=False)
         self._checkbox.add_class("custom-box-design")
 
         self._label: widgets.Label = widgets.Label(value=f"{description}: ")
@@ -263,7 +269,8 @@ class CustomCheckbox(widgets.HBox):
             </style>
         """)
 
-        super().__init__(children=[self._label, self._checkbox, self._css], **kwargs)
+        super().__init__(children=[self._label,
+                                   self._checkbox, self._css], **kwargs)
         widgets.link((self._checkbox, "value"), (self, "value"))
 
     def update_label(self, label: str):

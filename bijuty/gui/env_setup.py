@@ -13,9 +13,8 @@ import re
 import shlex
 import time
 import traceback
-from typing import Any, Dict
+from typing import Dict
 import shutil
-import sys
 import logging
 
 import pyflink
@@ -32,7 +31,8 @@ class GUIEnvSetup:
     def _set_fw_config_template(self) -> None:
         fw_name = self.get_selected_framework_name()
         if self.is_default_config_template():
-            fw_conf_template = FRAMEWORK_REGISTRY[fw_name.upper()].default_template
+            fw_conf_template = FRAMEWORK_REGISTRY[fw_name.upper(
+            )].default_template
         else:
             fw_conf_template = self.get_selected_config_template()
         os.environ[f"{fw_name}_CONF_TEMPLATE"] = fw_conf_template
@@ -48,27 +48,31 @@ class GUIEnvSetup:
         dest = shlex.quote(
             os.path.dirname(self.get_selected_config_destination())
         )
-
-        script_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        script_dir = shlex.quote(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), ".."))
 
         bash_command = (
             f"cd {script_dir} && source ./framework-configure.sh "
             f"--framework {fw_name} "
             f"--template {template} "
             f"--destination {dest} "
-            f"&& env | grep {fw_name} || true"
+            f"&& env | grep -e {fw_name} || true"
         )
-
         start_time = time.time()
-        self._log(f"Initializing configuration at: {dest}")
+        self._log(f"Initializing configuration at: {dest}/{fw_name}")
         self._log(bash_command, "debug")
         res = run_bash_command(bash_command, shell=True, timeout=6000)
+        self._log(res.stdout, "debug")
+
         elapsed = time.time() - start_time
-        self._log(f"Time elapsed for config init: {elapsed:.2f} seconds", "debug")
+        self._log(
+            f"Time elapsed for config init: {elapsed:.2f} seconds", "debug")
 
         if res.returncode != 0:
-            self._log(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}", "error")
-            raise RuntimeError(f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}")
+            self._log(
+                f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}", "error")
+            raise RuntimeError(
+                f"Bash script failed with exit code {res.returncode}.\nError: {res.stderr}")
 
         # Set environment variables after configuration initialization into current kernel
         for line in res.stdout.splitlines():
@@ -85,9 +89,9 @@ class GUIEnvSetup:
             self._update_env_file()
             self._update_worker_file()
 
-            self._log(f"Environment updated for {self.get_selected_framework_name()}!", "info")
+            self._log(
+                f"Environment updated for {self.get_selected_framework_name()}!", "info")
             self.is_config_set = True
-            self._toggle_cluster_buttons(start_disabled=False)
 
         except Exception as e:
             self._handle_setup_error(e)
@@ -107,7 +111,8 @@ class GUIEnvSetup:
             "SPARK_LOG_DIR": self.get_selected_log_dir(),
             "SPARK_PID_DIR": self.get_selected_pid_dir(),
             "SPARK_MASTER_PORT": self.get_selected_master_port(),
-            "LD_LIBRARY_PATH": os.environ.get("LD_LIBRARY_PATH", ""),  # important for slurm modules
+            # important for slurm modules
+            "LD_LIBRARY_PATH": os.environ.get("LD_LIBRARY_PATH", ""),
         }
 
     def _update_env_file(self) -> None:
@@ -132,9 +137,11 @@ class GUIEnvSetup:
             comment_pattern = rf"^[\s#\-]+(?:export\s+)?\b{escaped_var}\b.*$"
 
             if re.search(active_pattern, content, flags=re.MULTILINE):
-                content = re.sub(active_pattern, replacement, content, flags=re.MULTILINE)
+                content = re.sub(active_pattern, replacement,
+                                 content, flags=re.MULTILINE)
             elif re.search(comment_pattern, content, flags=re.MULTILINE):
-                content = re.sub(comment_pattern, replacement, content, count=1, flags=re.MULTILINE)
+                content = re.sub(comment_pattern, replacement,
+                                 content, count=1, flags=re.MULTILINE)
             else:
                 if content and not content.endswith("\n"):
                     content += "\n"
@@ -164,9 +171,9 @@ class GUIEnvSetup:
             # self._update_flink_masters_file()
             self._update_worker_file()
 
-            self._log(f"Environment updated for {self.get_selected_framework_name()}!", "info")
+            self._log(
+                f"Environment updated for {self.get_selected_framework_name()}!", "info")
             self.is_config_set = True
-            self._toggle_cluster_buttons(start_disabled=False)
 
             # # This is additional for pyflink
             # os.environ['FLINK_PROPERTIES'] = f"""
@@ -192,26 +199,28 @@ class GUIEnvSetup:
             "FLINK_CONF_DIR": self.get_selected_config_destination(),
             "FLINK_PARALLELISM": str(self.get_selected_executor_cpu()),
             "FLINK_LOG_DIR": self.get_selected_log_dir(),
-            "JAVA_HOME": os.environ.get("JAVA_HOME","None"),
-            "LD_LIBRARY_PATH": os.environ.get("LD_LIBRARY_PATH", ""),  # important for slurm modules
+            "JAVA_HOME": os.environ.get("JAVA_HOME", "None"),
+            # important for slurm modules
+            "LD_LIBRARY_PATH": os.environ.get("LD_LIBRARY_PATH", ""),
         }
 
     def _update_flink_conf_file(self) -> None:
         """Update the Flink configuration file (flink-conf.yaml)."""
 
         conf_path = self.get_selected_config_destination()
-        conf_files = [ "flink-conf.yaml", "masters", "meta.conf", "config.yaml" ]
+        conf_files = ["flink-conf.yaml", "masters", "meta.conf", "config.yaml"]
 
         # Build env
         try:
             java_home = os.environ.get("JAVA_HOME")
         except Exception as e:
-            logger.error("No JAVA_HOME value isfound in the environment. Please set it in the environment.")
+            logger.error(
+                "No JAVA_HOME value isfound in the environment. Please set it in the environment.")
 
         flink_env_updates = self._build_flink_env_updates()
 
         for file_i in conf_files:
-            file_i_path = os.path.join(conf_path,file_i)
+            file_i_path = os.path.join(conf_path, file_i)
             with open(file_i_path, "r") as f:
                 content = f.read()
             for placeholder, value in flink_env_updates.items():
@@ -257,18 +266,22 @@ class GUIEnvSetup:
 
         flink_lib_dir = os.path.join(flink_home, 'lib')
         if not os.path.exists(flink_lib_dir):
-            logger.error(f"Error: Flink lib directory does not exist at: {flink_lib_dir}")
+            logger.error(
+                f"Error: Flink lib directory does not exist at: {flink_lib_dir}")
             return False
 
         pyflink_dir = os.path.dirname(pyflink.__file__)
         pyflink_opt_dir = os.path.join(pyflink_dir, 'opt')
         if not os.path.exists(pyflink_opt_dir):
-            logger.error(f"Error: PyFlink 'opt' directory not found at: {pyflink_opt_dir}")
+            logger.error(
+                f"Error: PyFlink 'opt' directory not found at: {pyflink_opt_dir}")
             return False
 
-        jar_files = [f for f in os.listdir(pyflink_opt_dir) if f.startswith('flink-python') and f.endswith('.jar')]
+        jar_files = [f for f in os.listdir(pyflink_opt_dir) if f.startswith(
+            'flink-python') and f.endswith('.jar')]
         if not jar_files:
-            logger.error("Error: Could not find any flink-python*.jar in pyflink/opt folder.")
+            logger.error(
+                "Error: Could not find any flink-python*.jar in pyflink/opt folder.")
             return False
 
         jar_name = jar_files[0]
@@ -279,7 +292,8 @@ class GUIEnvSetup:
             try:
                 shutil.copy2(source_jar_path, target_jar_path)
             except PermissionError:
-                logger.error(f"Error: Insufficient permissions to write to {flink_lib_dir}.")
+                logger.error(
+                    f"Error: Insufficient permissions to write to {flink_lib_dir}.")
                 return False
             except Exception as e:
                 logger.error(f"Error: Failed to copy jar: {e}")
@@ -287,20 +301,19 @@ class GUIEnvSetup:
 
         return True
 
-
     def _handle_setup_error(self, error: Exception) -> None:
         """Handle setup errors."""
         self._log(f"FATAL ERROR: {str(error)}")
         tb = traceback.format_exc()
         self._log(tb, msg_type="error")
         self.is_config_set = False
-        self._toggle_cluster_buttons(start_disabled=False, stop_disabled=True)
 
     def _set_framework_home(self) -> None:
         os.environ[f"{self.get_selected_framework_name().upper()}_HOME"] = self.get_selected_framework_home()
 
     def _create_conf_dest_dir(self) -> None:
-        os.makedirs(os.path.dirname(self.get_selected_config_destination()), exist_ok=True)
+        os.makedirs(os.path.dirname(
+            self.get_selected_config_destination()), exist_ok=True)
 
     def _initialize_big_data_manager(self) -> None:
         """Initialize the BigDataManager with user input."""
@@ -315,9 +328,8 @@ class GUIEnvSetup:
             "fw_mapping": FRAMEWORK_REGISTRY,
         })
 
-    def _update_environment(self,fw_name):
+    def _update_environment(self, fw_name):
         if fw_name.upper() == "SPARK":
             self._update_spark_environment()
         if fw_name.upper() == "FLINK":
             self._update_flink_environment()
-

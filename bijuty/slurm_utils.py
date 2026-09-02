@@ -7,31 +7,38 @@ query job information, and manage cluster resources.
 
 from __future__ import annotations
 
+import logging
 import json
 import os
-import subprocess
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 import socket
+from datetime import datetime
+from .utils import run_bash_command
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Exceptions
+# Utility Functions
 # =============================================================================
 
-class SlurmException(Exception):
-    """Base exception for SLURM-related errors."""
-    pass
+def get_local_cpu_count() -> int:
+    """Get the number of CPUs available on the local machine."""
+    return os.cpu_count() or 1
 
 
-class NotInSlurmJobError(SlurmException):
-    """Raised when SlurmManager is initialized outside an active SLURM job."""
-    pass
-
-
-class SlurmCommandError(SlurmException):
-    """Raised when a SLURM command fails."""
-    pass
+def get_local_memory_mb() -> int:
+    """Get total memory of the local machine in MB."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable"):
+                    return int(line.split()[1]) // 1024  # kB -> MB
+    except Exception as e:
+        raise Exception(
+            f"\"MemAvailable\" doesn't exist on kernels < 3.14 \n{e}")
+    return 0
 
 
 # =============================================================================
@@ -42,7 +49,7 @@ class SlurmCommandError(SlurmException):
 class JobResources:
     """SLURM job resource information."""
 
-    node_count: int
+    node_list: list
     cpus_per_task: int
     tasks_per_node: int
     memory_per_cpu: int  # In MB
@@ -70,94 +77,42 @@ class JobResources:
         """Calculate total memory across all nodes (in MB)."""
         return self.memory_per_node_effective * self.node_count
 
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
-def is_in_slurm_job() -> bool:
-    """
-    Check if currently running inside a SLURM job.
-
-    Returns:
-        True if SLURM_JOB_ID environment variable is set, False otherwise
-    """
-    return "SLURM_JOB_ID" in os.environ
-
-
-def get_slurm_env_context() -> Dict[str, str]:
-    """
-    Get all SLURM environment variables.
-
-    Extracts and returns all environment variables starting with "SLURM_",
-    with the prefix removed for cleaner keys.
-
-    Returns:
-        Dictionary of SLURM environment variables
-    """
-    return {
-        key.replace("SLURM_", ""): value
-        for key, value in os.environ.items()
-        if key.startswith("SLURM_")
-    }
+    @property
+    def node_count(self) -> int:
+        return len(self.node_list)
 
 
 # =============================================================================
 # SLURM Manager
 # =============================================================================
 
+
 class SlurmManager:
-    """
-    Manager for interacting with SLURM workload manager.
-
-    This class provides methods to query job information, manage allocations,
-    and interact with SLURM commands. It must be initialized within an active
-    SLURM job.
-
-    Attributes:
-        job_id: The SLURM job ID
-        job_context: Dictionary of SLURM environment variables
-        job_info: Raw job information from SLURM
-    """
+    """Manager for interacting with SLURM workload manager."""
 
     def __init__(self, allow_outside_job: bool = False):
-        """
-        Initialize the SlurmManager.
+        """Initialize the SlurmManager."""
 
-        Args:
-            allow_outside_job: If True, allow initialization outside SLURM job
-
-        Raises:
-            NotInSlurmJobError: If not in a SLURM job and allow_outside_job is False
-        """
-        self._in_slurm_job = is_in_slurm_job()
+        self._in_slurm_job = self._is_in_slurm_job()
 
         if not self._in_slurm_job and not allow_outside_job:
-            raise NotInSlurmJobError(
+            raise Exception(
                 "No active SLURM job found. "
                 "SlurmManager must be initialized inside a SLURM job."
             )
 
-        if self._in_slurm_job:
-            self._job_context = get_slurm_env_context()
-            self._user = os.environ.get("USER")
-            self._job_id = self._job_context.get("JOB_ID", "unknown")
-            self._job_info_raw = self._fetch_job_info()
-            self._job_info = self._parse_job_info()
-            self._job_name = self._job_info["name"]
-            self._start_time = self._job_info["start_time"]["number"]
-            self._partition = self._job_info["partition"]
-        else:
-            self._job_context = {}
-            self._job_id = "none"
-            self._job_info_raw = {}
-            self._job_name = ""
-            self._start_time = ""
-            self._partition = ""
-
-
+        self._job_context = self._get_slurm_env_context(
+            local_machine=not self._in_slurm_job)
+        self._user = os.environ.get("USER")
+        self._job_id = self._job_context.get("SLURM_JOB_ID")
+        self._job_info_raw = self._fetch_job_info()
+        self._job_info = self._get_job_info()
+        # self._job_name = self._job_info["name"]
+        self._start_time = self._job_info["start_time"]["number"]
+        self._partition = self._job_info["partition"]
         self._login_node = self._get_default_login_host()
-        self._resources: Optional[JobResources] = None
+        self._resources = self._parse_job_resources()
+        self._set_missing_slurm_env_context()
 
     @property
     def in_slurm_job(self) -> bool:
@@ -172,10 +127,6 @@ class SlurmManager:
         return self._job_id
 
     @property
-    def job_context(self) -> Dict[str, str]:
-        return self._job_context.copy()
-
-    @property
     def job_info(self) -> Dict[str, Any]:
         return self._job_info if self._job_info else {}
 
@@ -184,194 +135,158 @@ class SlurmManager:
         return self._login_node
 
     @property
-    def job_name(self) -> str:
-        return self._job_name
+    def resources(self) -> JobResources:
+        return self._resources
 
-    @property
-    def start_time(self) -> str:
-        return self._start_time
-
-    @property
-    def partition(self) -> str:
-        return self._partition
-
-    # =====================================================================
-    # Private Methods
-    # =====================================================================
-
-    def _run_command(self, cmd: List[str]) -> str:
+    def _is_in_slurm_job(self) -> bool:  # try to make it dependent on other
         """
-        Execute a shell command and return stdout.
-
-        Args:
-            cmd: Command and arguments as a list
-
-        Returns:
-            Command stdout as string
-
-        Raises:
-            SlurmCommandError: If command fails
+        Check if currently running inside a SLURM job.
         """
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return result.stdout.strip()
-        except subprocess.CalledProcessError as e:
-            raise SlurmCommandError(f"Command failed: {' '.join(cmd)}\nError: {e.stderr.strip()}")
-        except FileNotFoundError:
-            raise SlurmCommandError(f"SLURM command not found: {cmd[0]}. Please ensure SLURM is installed or use mock SLURM environment.")
+        _SLURM_JOB_ID_VARS = ("SLURM_JOB_ID", "SLURM_JOBID")
+        for var in _SLURM_JOB_ID_VARS:
+            val = os.environ.get(var, "").strip()
+            if val.isdigit():
+                return True
+        return False
+
+    def _get_slurm_env_context(self, local_machine: bool = False) -> Dict[str, str]:
+        """Get all SLURM environment variables."""
+
+        if local_machine:
+            cpus = get_local_cpu_count()
+            mem_mb = get_local_memory_mb()
+            os.environ.setdefault("SLURM_JOB_ID", "localhost")
+            os.environ.setdefault("SLURM_JOBID", "localhost")
+            os.environ.setdefault("SLURM_JOB_NAME", "local-machine")
+            os.environ.setdefault(
+                "SLURM_JOB_USER", os.environ.get("USER") or "unknown")
+            os.environ.setdefault("SLURM_SUBMIT_DIR", os.getcwd())
+            os.environ.setdefault("SLURM_NNODES", "1")
+            os.environ.setdefault("SLURM_NTASKS", "1")
+            os.environ.setdefault("SLURM_CPUS_PER_TASK", str(cpus))
+            os.environ.setdefault("SLURM_MEM_PER_NODE", str(mem_mb))
+            os.environ.setdefault("SLURM_JOB_NODELIST",
+                                  socket.gethostname() or "localhost")
+            os.environ.setdefault("SLURM_JOB_NUM_NODES", "1")
+            os.environ.setdefault("SLURM_JOB_START_TIME",
+                                  datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+
+        # Extract and format the relevant variables
+        return {
+            key: value
+            for key, value in os.environ.items()
+            if key.startswith("SLURM_")
+        }
 
     def _fetch_job_info(self) -> Dict[str, Any]:
-        """
-        Fetch job information from SLURM.
+        """Fetch job information from SLURM."""
 
-        Returns:
-            Parsed JSON job information
-        """
-        if self._job_id == "unknown":
-            return {}
-
-        # Use scontrol for specific job, squeue for queue overview
-        if self._job_id:
-            cmd = ["scontrol", "show", "job", self._job_id, "--json"]
+        if not self._in_slurm_job:
+            cpus = get_local_cpu_count()
+            mem_mb = get_local_memory_mb()
+            hostname = socket.gethostname() or "localhost"
+            return {
+                "jobs": [
+                    {
+                        "job_id": self._job_id,
+                        "name": "local-machine",
+                        "partition": "local",
+                        "user_name": self._user,
+                        "node_count": {"set": True, "infinite": False, "number": 1},
+                        "cpus_per_task": {"set": True, "infinite": False, "number": cpus},
+                        "tasks": {"set": True, "infinite": False, "number": 1},
+                        "memory_per_cpu": {"set": False, "infinite": False, "number": mem_mb // max(cpus, 1)},
+                        "memory_per_node": {"set": True, "infinite": False, "number": mem_mb},
+                        "start_time": {"set": True, "infinite": False, "number": self._job_context.get("SLURM_JOB_START_TIME", "")},
+                        "job_resources": {"nodes": [hostname]},
+                        "nodes": hostname,
+                    }
+                ]
+            }
         else:
-            cmd = ["squeue", "--json"]
+            # Use scontrol for specific job, squeue for queue overview
+            if self._job_id:
+                cmd = ["scontrol", "show", "job", self._job_id, "--json"]
+            else:
+                cmd = ["squeue", "--json"]
 
-        try:
-            output = self._run_command(cmd)
-            if "{" in output:
-                return json.loads(output)
-            return {"raw_output": output}
-        except (json.JSONDecodeError, SlurmCommandError) as e:
-            return {"error": str(e)}
+            res = run_bash_command(cmd, shell=False, timeout=60)
+            if res.returncode:
+                raise RuntimeError(res.stderr.strip())
+
+            out = res.stdout.strip()
+            try:
+                return json.loads(out)
+            except json.JSONDecodeError:
+                raise Exception(f"Command returned invalid JSON: {out}")
 
     def _parse_job_resources(self) -> JobResources:
-        """
-        Parse job resources from SLURM job info.
+        """Parse job resources from SLURM job info."""
+        if not self._job_info:
+            return JobResources(
+                node_list=[],
+                cpus_per_task=0,
+                tasks_per_node=0,
+                memory_per_cpu=0
+            )
 
-        Returns:
-            JobResources dataclass with parsed resource information
-        """
-        if not self._job_info_raw or "jobs" not in self._job_info_raw:
-            return JobResources(node_count=0, cpus_per_task=0, tasks_per_node=0, memory_per_cpu=0)
-
-        job = self._job_info_raw["jobs"][0]
+        job = self._job_info
 
         # Parse memory per node if explicitly set
         mem_per_node_data = job.get("memory_per_node", {})
-        mem_per_node = int(mem_per_node_data["number"]) if mem_per_node_data.get("set") else None
+        mem_per_node = int(mem_per_node_data["number"]) if mem_per_node_data.get(
+            "set") else None
 
         return JobResources(
-            node_count=int(job["node_count"]["number"]),
+            node_list=self._get_nodes_list(),
             cpus_per_task=int(job["cpus_per_task"]["number"]),
             tasks_per_node=int(job["tasks"]["number"]),
             memory_per_cpu=int(job["memory_per_cpu"]["number"]),
             memory_per_node=mem_per_node,
         )
 
-    def _ensure_resources(self) -> JobResources:
-        """Ensure resources are parsed and cached."""
-        if self._resources is None:
-            self._resources = self._parse_job_resources()
-        return self._resources
-
     def _get_default_login_host(self):
         fqdn = socket.getfqdn().strip()
-        parts = fqdn.split('.',2)
+        parts = fqdn.split('.', 2)
         if len(parts) > 2:
             return f"login1.{parts[1]}.{parts[2]}"
         return "localhost"
 
-    def _parse_job_info(self):
-        for job_i in self._job_info_raw["jobs"]:
-            if int(job_i["job_id"]) == int(self.job_id):
-                return job_i
+    def _get_job_info(self):
+        if self._in_slurm_job:
+            for job_i in self._job_info_raw["jobs"]:
+                if int(job_i["job_id"]) == int(self.job_id):
+                    return job_i
+        else:
+            return self._job_info_raw["jobs"][0]
 
-    # =====================================================================
-    # Public API - Job Control
-    # =====================================================================
+    def _set_missing_slurm_env_context(self):
+        os.environ.setdefault("SLURM_MEM_PER_NODE",
+                              f"{self.resources.memory_per_node_effective}")
+        os.environ.setdefault("SLURM_CPUS_PER_NODE",
+                              f"{self.resources.cpus_per_node}")
+        os.environ.setdefault(
+            "SLURM_MEM_TOTAL", f"{self.resources.total_memory}")
+        os.environ.setdefault("SLURM_CPUS_TOTAL",
+                              f"{self.resources.total_cpus}")
 
-    def cancel_job(self, job_id: Optional[str] = None) -> str:
-        """
-        Cancel a specific job.
+    def _get_nodes_list(self) -> List[str]:
+        """Get the list of nodes allocated to this job."""
 
-        Args:
-            job_id: Job ID to cancel (defaults to current job)
-
-        Returns:
-            Command output or error message
-        """
-        target_id = job_id or self._job_id
-        if target_id == "none" or target_id == "unknown":
-            return "Error: No job ID available"
-
-        try:
-            return self._run_command(["scancel", str(target_id)])
-        except SlurmCommandError as e:
-            return str(e)
-
-    # =====================================================================
-    # Public API - Resource Queries
-    # =====================================================================
-
-    def get_nodes_list(self) -> List[str]:
-        """
-        Get the list of nodes allocated to this job.
-
-        Returns:
-            List of node hostnames
-        """
-        if not self._job_info_raw or "jobs" not in self._job_info_raw:
+        # if not self._job_info_raw or "jobs" not in self._job_info_raw:
+        #     return []
+        if not self._job_info:
             return []
 
-        nodes = self._job_info_raw["jobs"][0].get("job_resources", {}).get("nodes", [])
+        # nodes = self._job_info_raw["jobs"][0].get(
+        #     "job_resources", {}).get("nodes", [])
+        nodes = self._job_info.get(
+            "job_resources", {}).get("nodes", [])
         if isinstance(nodes, list):
             return nodes
         return [nodes] if nodes else []
 
-    def get_total_nodes(self) -> int:
-        """Get total number of nodes allocated to the job."""
-        return self._ensure_resources().node_count
-
-    def get_cpus_per_task(self) -> int:
-        """Get CPUs allocated per task."""
-        return self._ensure_resources().cpus_per_task
-
-    def get_tasks_per_node(self) -> int:
-        """Get tasks allocated per node."""
-        return self._ensure_resources().tasks_per_node
-
-    def get_cpus_per_node(self) -> int:
-        """Get total CPUs per node."""
-        return self._ensure_resources().cpus_per_node
-
-    def get_memory_per_cpu(self) -> int:
-        """Get memory per CPU in MB."""
-        return self._ensure_resources().memory_per_cpu
-
-    def get_memory_per_node(self) -> int:
-        """Get memory per node in MB."""
-        return self._ensure_resources().memory_per_node_effective
-
-    def get_total_cpus(self) -> int:
-        """Get total CPUs across all nodes."""
-        return self._ensure_resources().total_cpus
-
-    def get_total_memory(self) -> int:
-        """Get total memory across all nodes in MB."""
-        return self._ensure_resources().total_memory
-
-    def get_partition(self) -> str:
-        """Get the partition/job class."""
-        return self._job_context.get("JOB_PARTITION", "N/A")
-
-    # =====================================================================
-    # Representation
-    # =====================================================================
+    # In-built Methods
 
     def __repr__(self) -> str:
         """Return a formatted string representation."""
@@ -387,12 +302,11 @@ class SlurmManager:
             f"=== SlurmManager (Job ID: {self._job_id}) ===\n"
             f"Status: {status}\n"
             f"--- Environment Context ---\n"
-            f"Nodes: {self._job_context.get('NNODES', 'N/A')}\n"
-            f"Partition: {self._job_context.get('JOB_PARTITION', 'N/A')}\n"
+            f"Nodes: {self.resources.node_count} - {self.resources.node_list}\n"
+            f"Partition: {self._partition}\n"
             f"--- Job Resources ---\n"
-            f"Total CPUs: {self.get_total_cpus()}\n"
-            f"Total Memory: {self.get_total_memory()} MB\n"
-            f"Node List: {', '.join(self.get_nodes_list())}\n"
+            f"Total CPUs: {self.resources.total_cpus}\n"
+            f"Total Memory: {self.resources.total_memory} MB\n"
             f"--- Full Job Info ---\n"
             f"{pretty_job_info}\n"
             f"=========================================="

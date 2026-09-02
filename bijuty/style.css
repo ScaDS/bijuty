@@ -1,167 +1,447 @@
+/* ============================================================
+   Theme tokens
+   ============================================================ */
+:root {
+   /* Brand palette */
+   --color-primary: #0f2d56;
+   --color-primary-soft: #bbdefb;
+   --color-primary-softest: #ddeafd;
+   --color-accent: #0089fa;
+   --color-accent-strong: rgb(0, 47, 255);
+
+   /* Status */
+   --color-success: #4caf50;
+   --color-danger: #f44336;
+
+   /* Surfaces */
+   --color-paper: #ffffff;
+   --color-ink: #000000;
+   --color-tab-inactive-bg: #b0b0b0;
+   --color-tab-inactive-fg: #505050;
+   --color-border: #ccc;
+
+   /* Slider scale */
+   --slider-low: lightgreen;
+   --slider-high: red;
+
+   /* Geometry */
+   --radius-card: 10px;
+   --space-card: 10px;
+   --space-card-lg: 20px;
+
+   /* Controls */
+   --button-height: 40px;
+   --button-width-sm: 70px;
+   --button-width-md: 120px;
+   --font-size-control: 14px;
+
+   /* Motion */
+   --transition-card: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ============================================================
+   Layout containers
+   ============================================================ */
+
 .main-container {
-  padding: 10px;
-  border-radius: 10px;
-  /* background-image: linear-gradient( 179.6deg,  rgba(0,19,26,1) -4.9%, rgba(0,77,105,1) 108.4% ) !important; */
-  background: #0f2d56 !important;
-  gap:5px;
+   width: 100%;
+   padding: 10px;
+   border-radius: 0;
+   background: var(--color-primary) !important;
+   margin: 0;
 }
+
 .sub-container {
-  padding: 20px;
-  margin: 5px;
-  border-radius: 10px;
-  background: #bbdefb !important;
+   display: flex;
+   justify-content: flex-start;
+   padding: var(--space-card-lg);
+   margin: var(--space-card);
+   border-radius: var(--radius-card);
+   background: var(--color-primary-soft) !important;
 }
+
 .sub-container:hover {
-   box-shadow: inset 0px 0px 19px 0px #0089fa;
+   box-shadow: inset 0 0 19px 0 var(--color-accent);
+}
+
+.sub-container.sub-container-row1 {
+   width: 100%;
+   height: 800px;
+   overflow: hidden;
+   justify-content: space-around;
+   padding: 0;
+   margin: 0;
+   background: none !important;
+}
+
+.sub-container.sub-container-row1:hover {
+   box-shadow: none;
 }
 
 .disable {
-  filter: grayscale(100%);
-  pointer-events: none;  
-  cursor: not-allowed;
-  user-select: none;
-  opacity: 0.6;
+   filter: grayscale(100%);
+   pointer-events: none;
+   cursor: not-allowed;
+   user-select: none;
+   opacity: 0.6;
 }
 
-.checkbox{
-  flex-flow:column-reverse;
+.checkbox {
+   flex-flow: column-reverse;
 }
+
+/* ============================================================
+   Log panel
+   ============================================================ */
 
 .log {
-  /* white-space: pre-wrap !important; */
-  /* word-wrap: break-word !important; */
-  /* overflow-wrap: break-word !important; */
-  overflow-x: scroll !important;
-  max-width: 100% !important;
-  /* background: #bbdefb !important; */
-  background: #ffffff !important;
-  display: flex !important;
-  padding: 20px !important;
-  color: #ffffff !important;
-  /* width: 90vw; */
-
+   display: flex;
+   height: 200px;
+   padding: var(--space-card-lg);
+   margin: var(--space-card);
+   background: var(--color-ink);
+   white-space: pre-wrap;
+   overflow: scroll;
+   border-radius: var(--radius-card);
 }
+
+.log pre {
+   color: var(--color-paper) !important;
+}
+
+/* ============================================================
+   Slurm cards (themed per instance via --slurm-primary)
+   ============================================================ */
 
 .slurm-card {
-  --slurm-bg: color-mix(in srgb, var(--slurm-primary) 8%, #ffffff);
-  --slurm-accent: color-mix(in srgb, var(--slurm-primary) 18%, #ffffff);
+   --slurm-bg: color-mix(in srgb, var(--slurm-primary) 8%, var(--color-paper));
+   --slurm-accent: color-mix(in srgb, var(--slurm-primary) 18%, var(--color-paper));
 
-  box-sizing: border-box;
-  width: 100%;
-  padding: 16px;
-  border: 2px solid var(--slurm-primary);
-  border-radius: 10px;
-  background: var(--slurm-bg);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
-  height:100%
+   box-sizing: border-box;
+   width: 100%;
+   padding: 16px;
+   border: 2px solid var(--slurm-primary);
+   border-radius: var(--radius-card);
+   background: var(--slurm-bg);
+   display: flex;
+   flex-direction: column;
+   gap: 10px;
+   transition: var(--transition-card);
+   height: 100%;
 }
+
 .slurm-card:hover {
-  box-shadow: 0 4px 12px
-    color-mix(in srgb, var(--slurm-primary) 100%, transparent);
+   box-shadow: 0 4px 12px color-mix(in srgb, var(--slurm-primary) 100%, transparent);
 }
 
 .slurm-card_header {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+   display: flex;
+   flex-direction: row;
+   justify-content: space-between;
+   align-items: center;
+   gap: 12px;
 }
 
 .slurm-card_title {
-  margin: 0;
-  color: var(--slurm-primary);
-  font-size: 1.15rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+   margin: 0;
+   color: var(--slurm-primary);
+   font-size: 1.15rem;
+   font-weight: 700;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
 }
 
 .slurm-card_badge {
-  color: var(--slurm-primary);
-  background-color: var(--slurm-accent);
-  border: 1px dashed var(--slurm-primary);
-  border-radius: 10px;
-  padding: 4px 10px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
+   color: var(--slurm-primary);
+   background-color: var(--slurm-accent);
+   border: 1px dashed var(--slurm-primary);
+   border-radius: var(--radius-card);
+   padding: 4px 10px;
+   font-size: 0.7rem;
+   font-weight: 600;
+   text-transform: uppercase;
+   letter-spacing: 0.05em;
+   white-space: nowrap;
 }
 
 .slurm-card_resources {
-  color: var(--slurm-primary);
-  font-size: 0.875rem;
-  margin: 0;
-  font-weight: 500;
-  opacity: 0.85;
+   color: var(--slurm-primary);
+   font-size: 0.875rem;
+   margin: 0;
+   font-weight: 500;
+   opacity: 0.85;
 }
 
 .slurm-card_children {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 15px;
-  margin-top: 8px;
-  width: 100%;
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+   gap: 15px;
+   margin-top: 8px;
+   width: 100%;
 }
 
 .slurm-card .slurm-card .slurm-card_title {
-  font-size: 1rem;
+   font-size: 1rem;
 }
+
 .slurm-card .slurm-card .slurm-card_resources {
-  font-size: 0.8rem;
+   font-size: 0.8rem;
 }
 
-.plot_row{
-  background: white;
-  width: 100%;
-  padding: 2px;
-  margin-bottom: 5px;
-  border: 1px solid black;
+/* ============================================================
+   Plot rows
+   ============================================================ */
+
+.plot_row {
+   background: var(--color-paper);
+   width: 100%;
+   padding: 2px;
+   margin-bottom: 5px;
+   border: 1px solid var(--color-ink);
 }
 
-.plot_row_title{
-  width: 100%;
-  border: none;
-  padding-left: 5px;
-  font-size: large;
-  font-weight: bolder;
+.plot_row_title {
+   width: 100%;
+   border: none;
+   padding-left: 5px;
+   font-size: large;
+   font-weight: bolder;
 }
 
-.plot_row_metric_selector{
-  width: 60%;
+.plot_row_metric_selector {
+   width: 60%;
 }
 
-.plot_row_check_box{
-  margin: 0px 5px;
-  width: fit-content;
-  justify-content: center;
+.plot_row_check_box {
+   margin: 0 5px;
+   width: fit-content;
+   justify-content: center;
 }
+
+/* ============================================================
+   Tabs
+   ============================================================ */
 
 .tab-control-btn {
-  width: 25px !important;
-  height: 25px !important;
-  min-width: unset !important;
-  min-height: unset !important;
-  padding: 0px !important;
+   width: 25px !important;
+   height: 25px !important;
+   min-width: unset !important;
+   min-height: unset !important;
+   padding: 0 !important;
 }
 
 .tab-control-btn button {
-  width: 100% !important;
-  height: 100% !important;
-  padding: 0px !important;
+   width: 100% !important;
+   height: 100% !important;
+   padding: 0 !important;
 }
 
 .tab-controls {
-  width: 40px !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  padding: 0px !important;
+   width: 40px !important;
+   justify-content: flex-start !important;
+   align-items: center !important;
+   padding: 0 !important;
+}
+
+.gui-tabs .lm-TabBar-tab {
+   background: var(--color-tab-inactive-bg) !important;
+   color: var(--color-tab-inactive-fg) !important;
+   border: 1px solid var(--color-border) !important;
+   border-bottom: none !important;
+   border-radius: 4px 4px 0 0 !important;
+   padding: 4px 16px !important;
+   font-size: 13px !important;
+}
+
+.gui-tabs .lm-TabBar-tab.lm-mod-current {
+   background: var(--color-primary) !important;
+   color: var(--color-paper) !important;
+   font-weight: bold !important;
+}
+
+.gui-tabs .jupyter-widget-TabPanel-tabContents {
+   /* border: 1px solid var(--color-border) !important; */
+   border-top: none !important;
+   padding: 0 !important;
+}
+
+/* ============================================================
+   Form controls
+   ============================================================ */
+
+.default-label-style .widget-label {
+   color: var(--color-ink);
+   font-size: var(--font-size-control);
+   width: 200px;
+   font-weight: normal;
+}
+
+.slider .noUi-connects {
+   background: linear-gradient(to right,
+         var(--slider-low),
+         var(--slider-high)) !important;
+   border: 0.2px solid var(--color-ink);
+}
+
+.slider .noUi-touch-area,
+.slider .noUi-handle {
+   border: 0.5px solid var(--color-accent);
+   background: var(--color-accent);
+   border-radius: 50%;
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+
+.gui-header {
+   display: flex;
+   justify-content: center;
+   align-items: flex-start;
+   margin-top: 0;
+   padding: 0;
+}
+
+.gui-header-title {
+   color: var(--color-primary);
+   text-align: center;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+
+.gui-button {
+   width: var(--button-width-sm);
+   height: var(--button-height);
+   margin: 5px;
+   align-self: center;
+   font-weight: bold;
+   font-size: var(--font-size-control);
+}
+
+.gui-button:not(:disabled):hover {
+   transform: scale(1.05);
+}
+
+.gui-button-start {
+   background-color: var(--color-success) !important;
+   color: var(--color-ink) !important;
+}
+
+.gui-button-stop {
+   background-color: var(--color-danger) !important;
+   color: var(--color-paper) !important;
+}
+
+.gui-redirect-link {
+   text-decoration: none;
+}
+
+.gui-redirect-button {
+   width: var(--button-width-md);
+   height: var(--button-height);
+   margin: 5px;
+   cursor: pointer;
+   background-color: var(--color-accent-strong) !important;
+   color: var(--color-paper) !important;
+}
+
+.gui-redirect-button:not(:disabled):hover {
+   transform: scale(1.05);
+}
+
+/* ============================================================
+   Web GUI
+   ============================================================ */
+
+.web-gui-container {
+   width: 50%;
+}
+
+.web-gui-rows {
+   width: 100%;
+   align-items: center;
+   justify-content: center;
+}
+
+/* ============================================================
+   Pika configuration
+   ============================================================ */
+
+.pikaConfigRow {
+   height: max-content;
+   display: flex;
+   flex-direction: row;
+   margin-left: 0;
+   width: 100%;
+   padding: 5px 0;
+}
+
+.pikaConfigRow-url {
+   width: 40%;
+   justify-content: left;
+}
+
+.pikaConfigRow-url .widget-label {
+   width: max-content;
+   text-align: left;
+}
+
+.pikaConfigRow-api {
+   display: flex;
+   flex-direction: row;
+   width: 60%;
+   justify-content: left;
+   padding: 0 10px;
+}
+
+.pikaConfigRow-api-token {
+   display: flex;
+   flex-direction: row;
+}
+
+.pikaConfigRow-api-token .widget-label {
+   display: flex;
+   flex-direction: row;
+   justify-content: left;
+   width: max-content;
+}
+
+.pikaConfigRow-api-get-btn {
+   width: max-content;
+}
+
+.pikaConfigRow-api-message {
+   width: 98%;
+   height: 2em;
+   padding: 0;
+   align-items: center;
+   overflow-x: scroll;
+}
+
+.pika-metric-search {
+   width: 25%;
+   padding: 5px 0;
+}
+
+.pika-metric-search .widget-label {
+   width: max-content;
+}
+
+.pika-metric-list-box {
+   width: 100%;
+   display: grid;
+   grid-template-columns: repeat(4, 1fr);
+   grid-auto-rows: 15px;
+   gap: 2px;
+   height: 100px;
+   overflow-y: scroll;
+   background-color: var(--color-primary-softest);
+   padding: 5px;
+}
+
+.pika-metric-list-box .widget-checkbox {
+   width: max-content;
 }
