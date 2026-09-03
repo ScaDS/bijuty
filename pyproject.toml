@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bijuty"
+version = "0.1.1"
+description = "An interactive HPC-aware big data cluster lifecycle manager and performance assessment utility for JupyterHub"
+readme = "README.md"
+requires-python = ">=3.11.5"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+keywords = [
+    "jupyterhub",
+    "jupyter",
+    "hpc",
+    "spark",
+    "flink",
+    "big-data",
+    "slurm",
+    "monitoring",
+]
+authors = [
+    { name = "Apurv Deepak Kulkarni", email = "apurv.kulkarni@tu-dresden.de" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Framework :: Jupyter",
+]
+dependencies = [
+    "ipywidgets>=8.0.0",
+    "ipython>=8.0.0",
+    "psutil>=5.9.0",
+    "requests>=2.28.0",
+    "plotly>=5.0.0",
+    "anywidget>=0.11.0",
+    "pyspark==3.5.3",
+    "apache-flink==2.1.2"
+]
+
+[project.urls]
+Homepage = "https://github.com/ScaDS/bijuty"
+Repository = "https://github.com/ScaDS/bijuty"
+"Bug Tracker" = "https://github.com/ScaDS/bijuty/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["bijuty", "bijuty.*"]
+
+[tool.setuptools.package-data]
+bijuty = [
+    "*.css",
+    "*.sh",
+    "framework_template/**/*",
+]

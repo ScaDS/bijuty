@@ -17,8 +17,6 @@ from typing import Dict
 import shutil
 import logging
 
-import pyflink
-
 from .config import FRAMEWORK_REGISTRY
 from ..utils import run_bash_command
 
@@ -268,6 +266,13 @@ class GUIEnvSetup:
         if not os.path.exists(flink_lib_dir):
             logger.error(
                 f"Error: Flink lib directory does not exist at: {flink_lib_dir}")
+            return False
+
+        try:
+            import pyflink
+        except ImportError:
+            logger.error(
+                "PyFlink is not installed. Install it with `pip install pyflink` to enable the Flink jar check.")
             return False
 
         pyflink_dir = os.path.dirname(pyflink.__file__)
