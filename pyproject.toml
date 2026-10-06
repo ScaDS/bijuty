@@ -62,3 +62,42 @@ bijuty = [
     "*.sh",
     "framework_template/**/*",
 ]
+
+# =============================================================================
+# Testing configuration
+# =============================================================================
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "integration: end-to-end tests exercising widget orchestration.",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:plotly.*",
+    "ignore::DeprecationWarning:pyspark.*",
+]
+
+[tool.coverage.run]
+source = ["bijuty"]
+branch = true
+omit = [
+    "example/*",
+    "frameworks/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
