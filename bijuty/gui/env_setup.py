@@ -173,14 +173,6 @@ class GUIEnvSetup:
                 f"Environment updated for {self.get_selected_framework_name()}!", "info")
             self.is_config_set = True
 
-            # # This is additional for pyflink
-            # os.environ['FLINK_PROPERTIES'] = f"""
-            #     jobmanager.rpc.address: {self.get_selected_master_host()}
-            #     jobmanager.rpc.port: {self.get_selected_master_port()}
-            #     rest.address: {self.get_selected_master_host()}
-            #     rest.port: 8081
-            # """
-
             self._ensure_pyflink_jar_in_lib()
 
         except Exception as e:
@@ -228,19 +220,6 @@ class GUIEnvSetup:
                     pass
             with open(file_i_path, "w") as f:
                 f.write(content)
-
-    # def _update_flink_masters_file(self) -> None:
-    #     """Update the Flink masters file."""
-    #     file_path = os.path.join(
-    #         self.get_selected_config_destination(), "masters"
-    #     )
-    #     with open(file_path, "r") as f:
-    #         content = f.read()
-
-    #     content = content.replace("FLINK_MASTER_HOSTNAME", self.get_selected_master_host())
-
-    #     with open(file_path, "w") as f:
-    #         f.write(content)
 
     def _update_worker_file(self) -> None:
         """Update the framework worker file."""

@@ -73,7 +73,6 @@ def get_file_content(file_path: str):
 
 
 def find_first_available_port(
-    self,
     start_port: int = 7077,
     end_port: int = 9000,
     host: Optional[str] = None,

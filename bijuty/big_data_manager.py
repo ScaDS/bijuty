@@ -309,7 +309,7 @@ class BigDataManager:
         fw_config: FrameworkConfig = self._fw_mapping
         log_path = self._get_cluster_log_file()
         fw_name = self._user_inputs.fw_name.upper()
-        conf_dir = shlex.quote(os.environ[f"{fw_name}_CONF_DIR"])
+        conf_dir = shlex.quote(self._user_inputs.conf_dir)
         full_cmd = f"{conf_dir}/cmd.sh start {conf_dir} > {log_path} 2>&1"
         logger.debug(f"Running: {full_cmd}")
         result = run_bash_command(full_cmd, shell=True)
@@ -338,7 +338,7 @@ class BigDataManager:
         logger.info(f"Stopping {self._user_inputs.fw_name} cluster")
         fw_name = self._user_inputs.fw_name.upper()
         log_path = shlex.quote(self._get_cluster_log_file())
-        conf_dir = shlex.quote(os.environ[f"{fw_name}_CONF_DIR"])
+        conf_dir = shlex.quote(self._user_inputs.conf_dir)
 
         try:
             full_cmd = f"{conf_dir}/cmd.sh stop {conf_dir} > {log_path} 2>&1"

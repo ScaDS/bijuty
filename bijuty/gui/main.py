@@ -919,10 +919,13 @@ class GUIMain(GUIEnvSetup):
     def get_selected_master_port(self) -> str:
         """Get the selected master port."""
         if self.widgets["randomize_port"].value:
+            master_host = self.get_selected_master_host()
             if self.get_selected_framework_name().lower() == "spark":
-                return str(find_first_available_port(start_port=7077))
+                return str(find_first_available_port(
+                    start_port=7077, host=master_host))
             elif self.get_selected_framework_name().lower() == "flink":
-                return str(find_first_available_port(start_port=6123))
+                return str(find_first_available_port(
+                    start_port=6123, host=master_host))
         return str(self.selected_framework.default_master_port)
 
     def get_selected_master_host(self) -> str:
