@@ -1,0 +1,96 @@
+################################################################################
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+################################################################################
+#
+# BiJuTy -- Apache Flink configuration template
+# =============================================
+#
+# This is the ONLY file Flink 2.x reads. The legacy "flink-conf.yaml" is no
+# longer supported and has been removed.
+#
+# Values written in UPPER_CASE (FLINK_..., JAVA_HOME) are filled in by BiJuTy
+# from the Configuration Panel every time the cluster is started. Everything
+# else is a normal Flink setting you can edit by hand.
+#
+# Full option reference:
+#   https://nightlies.apache.org/flink/flink-docs-release-2.2/docs/deployment/config/
+
+# ---------------------------------------------------------------------------
+# Process environment
+# ---------------------------------------------------------------------------
+env:
+  java:
+    # Java installation used by Flink (passed through from the notebook).
+    home: JAVA_HOME
+    # Required to run Flink on Java 17/21. Leave as-is unless you know why.
+    opts:
+      all: --add-exports=java.rmi/sun.rmi.registry=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-exports=java.security.jgss/sun.security.krb5=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.locks=ALL-UNNAMED
+  log:
+    # Directory for Flink's own log files.
+    dir: FLINK_LOG_DIR
+
+# ---------------------------------------------------------------------------
+# JobManager (the Flink "master")
+# ---------------------------------------------------------------------------
+jobmanager:
+  # Accept connections on all interfaces so workers can reach the JobManager.
+  bind-host: 0.0.0.0
+  rpc:
+    address: FLINK_MASTER_HOSTNAME
+    port: FLINK_MASTER_PORT
+  memory:
+    process:
+      size: FLINK_MEM_MASTER
+
+# ---------------------------------------------------------------------------
+# TaskManager (the Flink "workers")
+# ---------------------------------------------------------------------------
+taskmanager:
+  # Bind all interfaces; each TaskManager advertises its own host automatically.
+  # Do NOT pin "taskmanager.host" here -- the same file is used on every node.
+  bind-host: 0.0.0.0
+  numberOfTaskSlots: FLINK_SLOTS_PER_TASKMANAGER
+  memory:
+    process:
+      size: FLINK_MEM_PER_WORKER
+
+# ---------------------------------------------------------------------------
+# Default parallelism for jobs that do not set their own
+# ---------------------------------------------------------------------------
+parallelism:
+  default: FLINK_PARALLELISM
+
+# ---------------------------------------------------------------------------
+# REST API / Web UI
+# ---------------------------------------------------------------------------
+rest:
+  address: FLINK_MASTER_HOSTNAME
+  bind-address: 0.0.0.0
+  port: 8081
+
+# ---------------------------------------------------------------------------
+# Optional: job archive for the Flink HistoryServer (not started by BiJuTy).
+# Uncomment both entries to keep a history of completed jobs.
+# ---------------------------------------------------------------------------
+# jobmanager:
+#   archive:
+#     fs:
+#       dir: file://FLINK_LOG_DIR/events-history
+# historyserver:
+#   archive:
+#     fs:
+#       dir: file://FLINK_LOG_DIR/events-history

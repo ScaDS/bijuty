@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bijuty"
-version = "0.1.1"
+version = "0.2.0"
 description = "An interactive HPC-aware big data cluster lifecycle manager and performance assessment utility for JupyterHub"
 readme = "README.md"
-requires-python = ">=3.11.5"
+requires-python = ">=3.12.3"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 keywords = [
@@ -27,7 +27,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
@@ -41,8 +40,14 @@ dependencies = [
     "requests>=2.28.0",
     "plotly>=5.0.0",
     "anywidget>=0.11.0",
-    "pyspark==3.5.3",
-    "apache-flink==2.1.2"
+    "pyspark==4.1.3",
+    "apache-flink==2.2.1"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
 ]
 
 [project.urls]
@@ -50,10 +55,14 @@ Homepage = "https://github.com/ScaDS/bijuty"
 Repository = "https://github.com/ScaDS/bijuty"
 "Bug Tracker" = "https://github.com/ScaDS/bijuty/issues"
 
+[project.scripts]
+bijuty-template = "bijuty.templates:main"
+
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["bijuty", "bijuty.*"]
 
 [tool.setuptools.package-data]
@@ -61,4 +70,43 @@ bijuty = [
     "*.css",
     "*.sh",
     "framework_template/**/*",
+]
+
+# =============================================================================
+# Testing configuration
+# =============================================================================
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "integration: end-to-end tests exercising widget orchestration.",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:plotly.*",
+    "ignore::DeprecationWarning:pyspark.*",
+]
+
+[tool.coverage.run]
+source = ["bijuty"]
+branch = true
+omit = [
+    "example/*",
+    "frameworks/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
 ]

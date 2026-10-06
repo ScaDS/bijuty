@@ -5,4 +5,8 @@ test-venv/
 build/
 dist/
 .ipynb_checkpoints/
-.vscode/
+docs/*.mp4
+docs/*.kdenlive
+docs/bijuty_raw-10fps.mp4
+non_repo_files/
+.pytest_cache/
