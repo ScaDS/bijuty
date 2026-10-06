@@ -1,9 +1,4 @@
-"""
-Big Data Utilities for JupyterHub.
-
-This package provides tools for configuring and managing big data frameworks
-(Spark, Flink) in Jupyter Notebook environments.
-"""
+"""Big data utilities for configuring and managing Spark and Flink clusters."""
 
 from __future__ import annotations
 from .gui.multi_framework_manager import MultiFrameworkManager
@@ -16,6 +11,11 @@ from .gui.config import (
     COLOR_SCHEME,
 )
 from .gui.main import GUIMain
+from .templates import (
+    available_templates,
+    factory_template_path,
+    init_template,
+)
 
 import logging
 import sys
@@ -50,13 +50,7 @@ class _LoggerFormatter(logging.Formatter):
 
 
 def set_log_level(level: int | str) -> None:
-    """Set the log level for the entire ``bijuty`` package.
-
-    Args:
-        level: A logging level such as ``logging.DEBUG``, ``logging.INFO``,
-            ``logging.WARNING``, ``logging.ERROR``, or the string name
-            (e.g. ``"DEBUG"``, ``"INFO"``).
-    """
+    """Set the log level for the entire ``bijuty`` package."""
     if isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
     logging.getLogger("bijuty").setLevel(level)
@@ -86,6 +80,9 @@ __all__ = [
     "COLOR_SCHEME",
     "MultiFrameworkManager",
     "set_log_level",
+    "init_template",
+    "factory_template_path",
+    "available_templates",
 ]
 
 # Only auto-display when running inside an IPython kernel

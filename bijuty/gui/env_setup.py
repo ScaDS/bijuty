@@ -1,10 +1,4 @@
-"""
-Environment setup utilities for the big data framework GUI.
-
-This module provides methods for configuring framework environments,
-writing configuration files, and initializing the BigDataManager.
-It is intended to be used as a mixin with GUIMain.
-"""
+"""Environment setup utilities for the big data framework GUI."""
 
 from __future__ import annotations
 
@@ -179,7 +173,7 @@ class GUIEnvSetup:
             self._handle_setup_error(e)
 
     def _build_flink_env_updates(self) -> Dict[str, str]:
-        """Build Spark environment variable updates."""
+        """Build Flink environment variable updates."""
         return {
             "FLINK_MASTER_HOSTNAME": self.get_selected_master_host(),
             "FLINK_MASTER_PORT": self.get_selected_master_port(),
@@ -195,28 +189,23 @@ class GUIEnvSetup:
         }
 
     def _update_flink_conf_file(self) -> None:
-        """Update the Flink configuration file (flink-conf.yaml)."""
+        """Fill the FLINK_* placeholders in the Flink configuration files."""
 
         conf_path = self.get_selected_config_destination()
-        conf_files = ["flink-conf.yaml", "masters", "meta.conf", "config.yaml"]
-
-        # Build env
-        try:
-            java_home = os.environ.get("JAVA_HOME")
-        except Exception as e:
-            logger.error(
-                "No JAVA_HOME value isfound in the environment. Please set it in the environment.")
+        conf_files = ["config.yaml", "masters"]
 
         flink_env_updates = self._build_flink_env_updates()
 
         for file_i in conf_files:
             file_i_path = os.path.join(conf_path, file_i)
+            if not os.path.exists(file_i_path):
+                continue
             with open(file_i_path, "r") as f:
                 content = f.read()
             for placeholder, value in flink_env_updates.items():
                 try:
                     content = content.replace(placeholder, value)
-                except:
+                except Exception:
                     pass
             with open(file_i_path, "w") as f:
                 f.write(content)
@@ -232,10 +221,7 @@ class GUIEnvSetup:
                 f.write(f"{node}\n")
 
     def _ensure_pyflink_jar_in_lib(self):
-        """
-        Ensures the correct versioned flink-python jar is present in $FLINK_HOME/lib.
-        Operates silently unless an error occurs.
-        """
+        """Ensure the versioned flink-python jar is present in $FLINK_HOME/lib."""
         flink_home = self.get_selected_framework_home()
         if not flink_home:
             logger.error("Error: FLINK_HOME environment variable is not set.")

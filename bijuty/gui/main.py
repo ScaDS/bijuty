@@ -1,9 +1,4 @@
-"""
-GUI utilities for configuring and managing big data frameworks (Spark, Flink).
-
-This module provides the main GUI orchestration, event handling, and environment
-setup for big data clusters using ipywidgets.
-"""
+"""GUI utilities for configuring and managing big data frameworks (Spark, Flink)."""
 
 from __future__ import annotations
 
@@ -45,16 +40,10 @@ logger = logging.getLogger(__name__)
 
 
 class GUIMain(GUIEnvSetup):
-    """
-    GUI utilities for configuring and managing big data frameworks.
-    """
+    """GUI utilities for configuring and managing big data frameworks."""
 
     def __init__(self, default_framework: str | None = None):
-        """Initialize the GUI utilities.
-
-        Args:
-            default_framework: Optional framework name to pre-select.
-        """
+        """Initialize the GUI utilities with an optional default framework."""
         self.is_config_set = False
         self.user = os.environ.get("USER", "unknown")
         self.cluster_name = socket.getfqdn().strip()

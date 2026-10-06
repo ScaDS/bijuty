@@ -1,9 +1,4 @@
-"""
-Monitoring package for Bijuty.
-
-This package provides real-time metric collection and visualization for big
-data clusters and processes via Plotly dashboards and ipywidgets.
-"""
+"""Monitoring package for Bijuty."""
 
 from .dashboard import MetricDashboard
 from .spark import SparkMetricCollector, SparkMetricMonitor, SparkMetricsSnapshot, SparkMetricsHistory

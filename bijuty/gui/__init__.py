@@ -1,9 +1,4 @@
-"""
-GUI package for Bijuty.
-
-This package provides reusable components for building Jupyter notebook-based
-interfaces to configure and manage big data frameworks (Spark, Flink).
-"""
+"""GUI package for Bijuty."""
 
 from .config import FrameworkConfig, ResourceAllocation, FRAMEWORK_REGISTRY, COLOR_SCHEME
 from .html import HTMLGenerator

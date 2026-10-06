@@ -189,17 +189,7 @@ class PikaClientLite:
 # =============================================================================
 
 def data_blocks(raw):
-    """Yield (key, timestamps, values, meta) for each top-level data member.
-
-    A pika timeline response looks like::
-
-        {
-          "unit": "...",
-          "timestamps": [t1, t2, ...],
-          "<name1>": [ [v1, v2, ...], {"mean": ..., "best_node": ..., "lowest_node": ...} ],
-          ...
-        }
-    """
+    """Yield (key, timestamps, values, meta) for each top-level data member."""
     if not isinstance(raw, dict):
         return
     timestamps = raw.get("timestamps")
@@ -311,15 +301,7 @@ def merge_timeline(entry, raw):
 # =============================================================================
 
 class PikaMetricMonitor(MetricDashboard):
-    """Interactive widget to graph pika job timeline metrics in a shared grid.
-
-    The monitor itself implements the ``collect()`` contract required by
-    :py:class:`MetricDashboard`: it iterates over currently-active metrics,
-    polls ``/timeline/{metric}/...`` for each, de-duplicates by timestamp,
-    and returns a ``Dict[metric_key, metric_data]`` that
-    :py:meth:`_render_metrics` maps onto the shared subplot figure built by
-    :py:meth:`MetricDashboard._build_process_figure`.
-    """
+    """Interactive widget to graph pika job timeline metrics in a shared grid."""
 
     def __init__(
         self,

@@ -1,9 +1,4 @@
-"""Common plotting dashboard for framework metric monitors.
-
-Provides a reusable ``MetricDashboard`` base class that renders
-real-time Plotly subplots with metric checkboxes, start/stop controls,
-and rolling history tracking.
-"""
+"""Common plotting dashboard for framework metric monitors."""
 
 from __future__ import annotations
 
@@ -36,11 +31,7 @@ PLOT_HEIGHT = 300
 # =============================================================================
 
 class MetricDashboard:
-    """Interactive Jupyter widget for monitoring application/process metrics.
-
-    Subclasses provide a ``collector`` object (with a ``collect()`` method)
-    and override ``_get_metric_display_name()``.
-    """
+    """Interactive Jupyter widget for monitoring application/process metrics."""
 
     def __init__(
         self,
@@ -62,6 +53,8 @@ class MetricDashboard:
         self._max_cols = max_cols
         self.running = False
         self._process_plots: Dict[str, Dict[str, Any]] = {}
+        self._collect_process: Optional[threading.Thread] = None
+        self._collect_process_stop_event = threading.Event()
 
         # Controls
         self._btn_start = widgets.Button(
@@ -163,7 +156,9 @@ class MetricDashboard:
         self._btn_start.disabled = False
         self._btn_stop.disabled = True
         self._collect_process_stop_event.set()
-        self._collect_process.join()
+        if self._collect_process is not None:
+            self._collect_process.join()
+        self._collect_process = None
 
     def _collect_loop(self) -> None:
         while self.running:
@@ -180,10 +175,7 @@ class MetricDashboard:
         return list(getattr(history, metric))
 
     def _get_metric_display_name(self, metric: str) -> str:
-        """Return the human-readable label for a metric key.
-
-        Subclasses **must** override this method.
-        """
+        """Return the human-readable label for a metric key."""
         raise NotImplementedError
 
     # ------------------------------------------------------------------

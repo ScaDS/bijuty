@@ -1,9 +1,4 @@
-"""Spark application metric collector with interactive Plotly visualization.
-
-Connects to the Spark REST API (port 4040) to fetch application-level metrics
-(jobs, stages, tasks, executors, shuffle I/O) and renders them via the shared
-:py:class:`~bijuty.metric_plotter.MetricDashboard`.
-"""
+"""Spark application metric collector with interactive Plotly visualization."""
 
 from __future__ import annotations
 

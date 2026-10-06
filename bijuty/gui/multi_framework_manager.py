@@ -1,9 +1,4 @@
-"""
-Multi-framework management widget for Jupyter notebooks.
-
-Provides a tabbed interface with a single initial tab and dynamic "+" / "x"
-controls to add or remove framework GUIs on demand.
-"""
+"""Multi-framework management widget for Jupyter notebooks."""
 
 from __future__ import annotations
 
@@ -17,12 +12,7 @@ from .config import FRAMEWORK_REGISTRY
 
 
 class MultiFrameworkManager:
-    """Dynamic tabbed manager for big data framework GUIs.
-
-    Starts with a single tab. Clicking **+** appends a new ``GUIMain`` tab,
-    and clicking **x** closes the currently-selected tab (at least one tab
-    always remains).
-    """
+    """Dynamic tabbed manager for big data framework GUIs."""
 
     def __init__(self) -> None:
         """Initialize the multi-framework manager."""

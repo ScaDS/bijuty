@@ -1,9 +1,4 @@
-"""Flink application metric collector with interactive Plotly visualization.
-
-Connects to the Flink REST API (port 8081 by default) to fetch job-level
-metrics and renders them via the shared
-:py:class:`~bijuty.metric_plotter.MetricDashboard`.
-"""
+"""Flink application metric collector with interactive Plotly visualization."""
 
 from __future__ import annotations
 

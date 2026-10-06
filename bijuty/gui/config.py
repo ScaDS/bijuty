@@ -1,9 +1,4 @@
-"""
-Framework configuration data classes and registry.
-
-This module keeps dataclass definitions, constants, and the framework registry
-completely separate from widget factories and HTML generators.
-"""
+"""Framework configuration data classes and registry."""
 
 from __future__ import annotations
 

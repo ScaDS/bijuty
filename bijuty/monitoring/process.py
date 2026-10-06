@@ -1,9 +1,4 @@
-"""Process monitoring module for tracking system resource usage.
-
-This module provides classes for collecting process metrics
-(CPU usage, memory consumption, thread count, I/O statistics).
-The visualization layer has been moved to :py:mod:`~bijuty.metric_plotter`.
-"""
+"""Process monitoring module for tracking system resource usage."""
 
 from __future__ import annotations
 
@@ -52,18 +47,7 @@ ENABLED_METRICS = [
 
 @dataclass
 class ProcessMetricsSnapshot:
-    """Snapshot of process metrics at a single point in time.
-
-    Attributes:
-        cpu_percent: CPU usage percentage.
-        memory_percent: Memory usage as percentage of total system memory.
-        memory_rss_mb: Resident set size in megabytes.
-        memory_vms_mb: Virtual memory size in megabytes.
-        num_threads: Number of threads used by the process.
-        io_read_mb: Bytes read by the process in megabytes.
-        io_write_mb: Bytes written by the process in megabytes.
-        timestamp: Unix timestamp when the snapshot was taken.
-    """
+    """Snapshot of process metrics at a single point in time."""
 
     cpu_percent: float
     memory_percent: float
@@ -77,11 +61,7 @@ class ProcessMetricsSnapshot:
 
 @dataclass
 class ProcessMetricsHistory:
-    """Historical data for a process's metrics.
-
-    Maintains fixed-size deques for each metric type, storing the most recent
-    measurements up to the configured history size.
-    """
+    """Historical data for a process's metrics."""
 
     cpu: deque[float] = field(
         default_factory=lambda: deque(
@@ -141,22 +121,7 @@ class ProcessMetricsHistory:
 # =============================================================================
 
 class ProcessMetricCollector:
-    """Collects system metrics for specified processes.
-
-    This class scans the system for processes matching the given process names
-    and maintains a rolling history of their resource usage metrics.
-
-    Args:
-        process_names: List of process name patterns to monitor.
-        history_size: Maximum number of data points to retain per metric.
-            Defaults to DEFAULT_HISTORY_SIZE.
-
-    Example:
-        >>> collector = ProcessMetricCollector(
-        ...     [{"title": "Spark Master", "pattern": "org.apache.spark.deploy.master.Master"}]
-        ... )
-        >>> metrics = collector.collect()
-    """
+    """Collects system metrics for specified processes."""
 
     HISTORY: int = DEFAULT_HISTORY_SIZE
 

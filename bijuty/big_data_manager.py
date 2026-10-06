@@ -1,9 +1,4 @@
-"""
-Big data cluster management for Spark and Flink.
-
-This module provides functionality to configure, start, stop, and monitor
-big data clusters (Spark and Flink) running on SLURM-managed resources.
-"""
+"""Big data cluster management for Spark and Flink on SLURM-managed resources."""
 
 from __future__ import annotations
 
@@ -146,10 +141,7 @@ class BigDataManager:
         logger.info(f"Cleanup complete for {self._user_inputs.fw_name}")
 
     def _verify_cluster_workers(self) -> tuple[bool, int, Exception | str]:
-        """
-        Checks if all workers listed in a local text file are active in the cluster.
-        Currently only number of workers are counted without matching the exact hostname.
-        """
+        """Check whether all configured workers are active in the cluster."""
 
         framework = self._user_inputs.fw_name.lower()
 

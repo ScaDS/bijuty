@@ -40,9 +40,9 @@ import bijuty
 
 | Component | Version |
 |-----------|---------|
-| **Python** | 3.11.5+ (tested with 3.12) |
-| **Apache Spark / PySpark** | 3.5.3 |
-| **Apache Flink / PyFlink** | 2.1.2 |
+| **Python** | 3.12.3 |
+| **Apache Spark / PySpark** | 4.1.3 |
+| **Apache Flink / PyFlink** | 2.2.1 |
 
 The Python dependencies (`ipywidgets`, `anywidget`, `plotly`, `psutil`, `requests`) are installed automatically.
 
@@ -54,7 +54,7 @@ Additional requirements:
   - **Environment module** (recommended on HPC): `module load spark` or `module load flink`.
   - **Custom path**: tick **Use custom `SPARK_HOME` / `FLINK_HOME`** in the Configuration Panel and enter the installation directory.
   - **Environment variable**: export `SPARK_HOME` or `FLINK_HOME` before starting the notebook.
-- **A Java runtime.** Flink relies on a valid `JAVA_HOME`, which is passed through to the cluster configuration.
+- **A Java runtime (17 or 21 recommended).** Apache Spark 4 requires Java 17+, and Apache Flink 2 requires Java 11+. A valid `JAVA_HOME` is passed through to the cluster configuration.
 
 ### Enabling Jupyter Widgets
 
@@ -85,6 +85,66 @@ jupyter labextension install @jupyter-widgets/jupyterlab-manager
 | **Randomize Master Port** | Avoid port conflicts when many users share nodes |
 
 The CPU and memory sliders are dynamically constrained by the SLURM allocation and by each other, so the available ranges always stay valid (e.g. the compute-unit range is capped by the per-node pool, which is in turn capped by the remaining node capacity).
+
+### Custom Configuration Templates
+
+The **Template** control lets you point BiJuTy at your own framework configuration
+directory instead of the bundled default. When a template is used, its entire
+directory is copied to the **Destination** and then BiJuTy fills in the
+configuration.
+
+How the GUI and a custom template interact:
+
+- **Placeholders are substituted; hardcoded values are kept.** The bundled
+  templates use UPPER_CASE placeholder tokens — Spark uses `FRAMEWORK_*`
+  (e.g. `FRAMEWORK_PARALLELISM`, `FRAMEWORK_MEM_MASTER`) and Flink uses `FLINK_*`
+  (e.g. `FLINK_PARALLELISM`, `FLINK_SLOTS_PER_TASKMANAGER`, `FLINK_MEM_*`). BiJuTy
+  replaces these tokens with the values from the Configuration Panel sliders. Any
+  hardcoded value in your template (e.g. `parallelism.default: 8` or
+  `numberOfTaskSlots: 4`) is left untouched, because substitution is a literal
+  token replacement — if the token is absent, nothing changes.
+- **The GUI does not read the template back.** The sliders are not populated from
+  the template; they always start from BiJuTy's defaults and are only constrained
+  by the SLURM allocation. Selecting a template does not move any slider to match
+  the template's values.
+- **A placeholder token is the only way a slider value reaches the config.** Keep
+  the token in a line to let the GUI drive that setting; remove it (and hardcode
+  the value) to keep full manual control.
+- **Some files are always regenerated.** The worker list (`workers`) is always
+  rewritten from the **Worker Hosts** checkboxes, regardless of the template.
+
+This means a fully hand-tuned configuration is possible: use a custom template
+with hardcoded values and omit the corresponding placeholder tokens.
+
+#### Creating a template from the factory default
+
+Use `bijuty.init_template` (or the `bijuty-template` command) to copy the bundled
+factory template into an editable directory:
+
+```python
+import bijuty
+
+path = bijuty.init_template("flink", "./my-flink-template")
+print(path)
+```
+
+```bash
+# equivalent command-line form
+bijuty-template flink --destination ./my-flink-template
+```
+
+Edit the files in that directory — add options, change resources, hardcode values,
+or remove placeholder tokens you do not want the GUI to fill in — then start the
+cluster from the GUI:
+
+1. Under **Template**, clear **Use default template**.
+2. Enter the path returned by `init_template`.
+3. Press **Start Cluster**.
+
+Use `bijuty.available_templates()` to list the frameworks with a factory template,
+and `bijuty.factory_template_path("spark")` to locate the bundled one without
+copying it. Pass `overwrite=True` (CLI: `--overwrite`) to merge into an existing
+directory instead of raising.
 
 ### Resource Allocation Overview
 
@@ -117,6 +177,28 @@ Real-time monitoring across multiple levels. Each monitor is an interactive Plot
 ### Multi-Cluster Management
 
 Add cluster tabs with **+** and remove them with **x** to manage multiple independent framework clusters through a tabbed interface.
+
+## Roadmap / TODO
+
+- [ ] **Make the Configuration Panel updatable from the selected template.** When
+  a custom (or default) template is loaded, parse its values and initialize the
+  sliders and their ranges (parallelism, slots per TaskManager, master/worker
+  memory, and the other resource settings) so the GUI matches the template,
+  instead of always starting from BiJuTy's built-in defaults. This would keep the
+  GUI and the generated configuration in sync in both directions.
+- [ ] **Add a "create editable copy" action to the Configuration Panel.** Wire the
+  `bijuty.init_template` helper (and the `bijuty-template` command) into the GUI
+  with a button next to the **Template** field, so a user can stamp out an
+  editable copy of the factory default and have the path filled in automatically
+  instead of running Python or the CLI by hand.
+- [ ] **Validate custom templates before starting.** Check that a user-supplied
+  template directory contains the required files (`meta.conf`, `cmd.sh`, and the
+  framework config file) and surface a clear message in the GUI, rather than
+  failing later inside `framework-configure.sh`.
+- [ ] **Unify template placeholder handling across frameworks.** Spark templates
+  use `FRAMEWORK_*` tokens substituted by `framework-configure.sh`, while Flink
+  uses `FLINK_*` tokens substituted in Python; document the exact placeholder set
+  each framework supports and, where possible, converge on one convention.
 
 ## License
 

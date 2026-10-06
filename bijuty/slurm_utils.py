@@ -1,9 +1,4 @@
-"""
-SLURM job management utilities.
-
-This module provides functionality to interact with SLURM workload manager,
-query job information, and manage cluster resources.
-"""
+"""SLURM job management utilities."""
 
 from __future__ import annotations
 
@@ -139,9 +134,7 @@ class SlurmManager:
         return self._resources
 
     def _is_in_slurm_job(self) -> bool:  # try to make it dependent on other
-        """
-        Check if currently running inside a SLURM job.
-        """
+        """Check if currently running inside a SLURM job."""
         _SLURM_JOB_ID_VARS = ("SLURM_JOB_ID", "SLURM_JOBID")
         for var in _SLURM_JOB_ID_VARS:
             val = os.environ.get(var, "").strip()

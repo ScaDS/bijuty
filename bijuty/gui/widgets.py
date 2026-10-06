@@ -1,10 +1,4 @@
-"""
-Reusable widget factories and custom ipywidgets extensions.
-
-This module provides standardized widget creation helpers (buttons, sliders,
-dropdowns, text fields, checkboxes) and custom containers (VBox, HBox,
-CustomCheckbox) used across the GUI.
-"""
+"""Reusable widget factories and custom ipywidgets extensions."""
 
 from __future__ import annotations
 
