@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 import socket
@@ -12,6 +13,35 @@ from datetime import datetime
 from .utils import run_bash_command
 
 logger = logging.getLogger(__name__)
+
+
+def expand_nodelist(expr: str) -> List[str]:
+    """Expand a compact SLURM nodelist (e.g. ``n[1135-1136,1140]``).
+
+    Returns the input unchanged when it contains no ``[...]`` range.
+    """
+    expr = expr.strip()
+    if not expr:
+        return []
+    match = re.match(r"^(.*?)\[(.*)\]$", expr)
+    if not match:
+        return [expr]
+    prefix, ranges = match.group(1), match.group(2)
+    names: List[str] = []
+    for part in ranges.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start, end = part.split("-", 1)
+            width = len(start)
+            names.extend(
+                f"{prefix}{i:0{width}d}"
+                for i in range(int(start), int(end) + 1)
+            )
+        else:
+            names.append(f"{prefix}{part}")
+    return names
 
 
 # =============================================================================
@@ -264,17 +294,34 @@ class SlurmManager:
                               f"{self.resources.total_cpus}")
 
     def _get_nodes_list(self) -> List[str]:
-        """Get the list of nodes allocated to this job."""
+        """Get the list of nodes allocated to this job.
 
-        # if not self._job_info_raw or "jobs" not in self._job_info_raw:
-        #     return []
+        Handles both the legacy shape (``nodes`` is a list of names) and the
+        modern ``scontrol ... --json`` shape, where ``nodes`` is a dict::
+
+            {"count": 1, "list": "n[1135-1136]", "allocation": [{"name": "..."}]}
+        """
         if not self._job_info:
             return []
 
-        # nodes = self._job_info_raw["jobs"][0].get(
-        #     "job_resources", {}).get("nodes", [])
         nodes = self._job_info.get(
             "job_resources", {}).get("nodes", [])
+
+        if isinstance(nodes, dict):
+            allocation = nodes.get("allocation")
+            if isinstance(allocation, list) and allocation:
+                return [
+                    entry["name"]
+                    for entry in allocation
+                    if isinstance(entry, dict) and entry.get("name")
+                ]
+            node_list = nodes.get("list", "")
+            if isinstance(node_list, list):
+                return [str(node) for node in node_list]
+            if isinstance(node_list, str):
+                return expand_nodelist(node_list)
+            return []
+
         if isinstance(nodes, list):
             return nodes
         return [nodes] if nodes else []

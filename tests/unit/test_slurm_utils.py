@@ -203,6 +203,43 @@ class TestSlurmManagerHelpers:
 
         assert SlurmManager._get_nodes_list(fake_self) == []
 
+    def test_get_nodes_list_handles_modern_dict_with_allocation(self):
+        fake_self = SimpleNamespace(_job_info={
+            "job_resources": {
+                "nodes": {
+                    "count": 2,
+                    "list": "n[1135-1136]",
+                    "allocation": [
+                        {"index": 0, "name": "n1135"},
+                        {"index": 1, "name": "n1136"},
+                    ],
+                }
+            }
+        })
+
+        assert SlurmManager._get_nodes_list(fake_self) == ["n1135", "n1136"]
+
+    def test_get_nodes_list_handles_modern_dict_list_only(self):
+        fake_self = SimpleNamespace(_job_info={
+            "job_resources": {"nodes": {"count": 1, "list": "n1135"}}
+        })
+
+        assert SlurmManager._get_nodes_list(fake_self) == ["n1135"]
+
+    def test_get_nodes_list_expands_compact_nodelist(self):
+        fake_self = SimpleNamespace(_job_info={
+            "job_resources": {"nodes": {"list": "node[01-03]"}}
+        })
+
+        assert SlurmManager._get_nodes_list(fake_self) == \
+            ["node01", "node02", "node03"]
+
+    def test_expand_nodelist_passthrough(self):
+        from bijuty.slurm_utils import expand_nodelist
+
+        assert expand_nodelist("nodeA") == ["nodeA"]
+        assert expand_nodelist("") == []
+
     def test_default_login_host_derived_from_fqdn(self):
         with patch("bijuty.slurm_utils.socket.getfqdn",
                    return_value="node01.cluster.tu-dresden.de"):
