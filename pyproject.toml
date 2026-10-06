@@ -56,6 +56,7 @@ bijuty-template = "bijuty.templates:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
+where = ["."]
 include = ["bijuty", "bijuty.*"]
 
 [tool.setuptools.package-data]

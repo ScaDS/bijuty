@@ -234,11 +234,19 @@ class TestSlurmManagerHelpers:
         assert SlurmManager._get_nodes_list(fake_self) == \
             ["node01", "node02", "node03"]
 
-    def test_expand_nodelist_passthrough(self):
-        from bijuty.slurm_utils import expand_nodelist
+    def test_get_nodes_list_expands_mixed_nodelist(self):
+        fake_self = SimpleNamespace(_job_info={
+            "job_resources": {"nodes": {"list": "n[1135-1136,1140]"}}
+        })
 
-        assert expand_nodelist("nodeA") == ["nodeA"]
-        assert expand_nodelist("") == []
+        assert SlurmManager._get_nodes_list(fake_self) == \
+            ["n1135", "n1136", "n1140"]
+
+    def test_get_nodes_list_handles_none(self):
+        fake_self = SimpleNamespace(
+            _job_info={"job_resources": {"nodes": None}})
+
+        assert SlurmManager._get_nodes_list(fake_self) == []
 
     def test_default_login_host_derived_from_fqdn(self):
         with patch("bijuty.slurm_utils.socket.getfqdn",

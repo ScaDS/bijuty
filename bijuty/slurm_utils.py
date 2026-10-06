@@ -15,35 +15,6 @@ from .utils import run_bash_command
 logger = logging.getLogger(__name__)
 
 
-def expand_nodelist(expr: str) -> List[str]:
-    """Expand a compact SLURM nodelist (e.g. ``n[1135-1136,1140]``).
-
-    Returns the input unchanged when it contains no ``[...]`` range.
-    """
-    expr = expr.strip()
-    if not expr:
-        return []
-    match = re.match(r"^(.*?)\[(.*)\]$", expr)
-    if not match:
-        return [expr]
-    prefix, ranges = match.group(1), match.group(2)
-    names: List[str] = []
-    for part in ranges.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            start, end = part.split("-", 1)
-            width = len(start)
-            names.extend(
-                f"{prefix}{i:0{width}d}"
-                for i in range(int(start), int(end) + 1)
-            )
-        else:
-            names.append(f"{prefix}{part}")
-    return names
-
-
 # =============================================================================
 # Utility Functions
 # =============================================================================
@@ -304,27 +275,34 @@ class SlurmManager:
         if not self._job_info:
             return []
 
-        nodes = self._job_info.get(
-            "job_resources", {}).get("nodes", [])
+        nodes = self._job_info.get("job_resources", {}).get("nodes", [])
 
         if isinstance(nodes, dict):
-            allocation = nodes.get("allocation")
-            if isinstance(allocation, list) and allocation:
-                return [
-                    entry["name"]
-                    for entry in allocation
-                    if isinstance(entry, dict) and entry.get("name")
-                ]
-            node_list = nodes.get("list", "")
-            if isinstance(node_list, list):
-                return [str(node) for node in node_list]
-            if isinstance(node_list, str):
-                return expand_nodelist(node_list)
-            return []
+            allocation = nodes.get("allocation") or []
+            names = [n["name"] for n in allocation if n.get("name")]
+            if names:
+                return names
+            nodes = nodes.get("list", [])
 
-        if isinstance(nodes, list):
-            return nodes
-        return [nodes] if nodes else []
+        if not nodes:
+            return []
+        if not isinstance(nodes, str):
+            return [str(node) for node in nodes]
+
+        # Plain name, or compact nodelist such as "n[1135-1136,1140]".
+        match = re.match(r"^(.*?)\[(.*)\]$", nodes.strip())
+        if not match:
+            return [nodes]
+
+        prefix, ranges = match.groups()
+        names = []
+        for part in ranges.split(","):
+            start, end = part.split("-", 1) if "-" in part else (part, part)
+            names += [
+                f"{prefix}{i:0{len(start)}d}"
+                for i in range(int(start), int(end) + 1)
+            ]
+        return names
 
     # In-built Methods
 
