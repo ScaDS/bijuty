@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The project was originally developed under the working name *big-data-framework-tools-for-jupyterhub*
 and the package `big_data_utils`, later renamed to **BiJuTy** (`bijuty`).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-06
 
 ### Added
 
@@ -17,6 +17,10 @@ and the package `big_data_utils`, later renamed to **BiJuTy** (`bijuty`).
   template, plus `available_templates` and `factory_template_path` helpers.
 - Pytest and coverage configuration in `pyproject.toml` (`--strict-markers`,
   `--strict-config`, branch coverage, integration marker). (`a9702ee`)
+- Automated unit and integration test suite, documented in `tests/README.md`.
+  (`c55087b`)
+- Optional `test` dependency extra (`pytest`, `pytest-cov`) enabling
+  `pip install -e ".[test]"`.
 
 ### Changed
 
@@ -26,6 +30,10 @@ and the package `big_data_utils`, later renamed to **BiJuTy** (`bijuty`).
   template files, and reduced the remaining templates to their relevant,
   documented settings.
 - Cleanup refinements across the codebase. (`218dc9e`)
+- Adopted a `src/` layout (`bijuty/` → `src/bijuty/`), updated setuptools
+  package discovery (`where = ["src"]`), set the pytest `pythonpath` to `src`
+  (plus the repo root so the `tests` package stays importable), and refreshed
+  the test-suite documentation accordingly. (`740e65e`)
 - Updated `.gitignore`. (`8b7922a`)
 
 ### Removed
@@ -194,4 +202,6 @@ and the package `big_data_utils`, later renamed to **BiJuTy** (`bijuty`).
 - Added missing libraries and logger for `cluster_utils.py`. (`4287547`, `ada5b5d`, `8e3b005`)
 - Corrected a logging typo so the info message is formatted correctly. (`a1178ae`)
 
-[Unreleased]: https://github.com/ScaDS/bijuty/compare/main...HEAD
+[Unreleased]: https://github.com/ScaDS/bijuty/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ScaDS/bijuty/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/ScaDS/bijuty/releases/tag/v0.1.1

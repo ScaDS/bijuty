@@ -200,6 +200,19 @@ Add cluster tabs with **+** and remove them with **x** to manage multiple indepe
   uses `FLINK_*` tokens substituted in Python; document the exact placeholder set
   each framework supports and, where possible, converge on one convention.
 
+## Development
+
+For local development, install the package in editable mode together with the
+test dependencies:
+
+```bash
+pip install -e ".[test]"
+pytest
+```
+
+The package source lives under `src/bijuty/`; the test suite — with a detailed
+guide in [`tests/README.md`](./tests/README.md) — lives under `tests/`.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 (GPL-3.0-or-later) — see the [LICENSE](./LICENSE) file for details.

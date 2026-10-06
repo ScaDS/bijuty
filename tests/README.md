@@ -5,7 +5,7 @@ what is covered, how it is organised, how the tests stay hermetic (no SLURM,
 no network), and how to run and extend them.
 
 The suite is built with [pytest](https://docs.pytest.org/) and contains
-**307 collected test cases** (294 test functions, some parametrized into
+**312 collected test cases** (299 test functions, some parametrized into
 multiple cases) across **16 modules** plus shared fixtures.
 
 ---
@@ -50,10 +50,12 @@ behaviour, and the vendored `frameworks/` trees (Spark/Flink sources).
 
 ## Quick start
 
-Run everything from the repository root (`pyproject.toml` sets
-`pythonpath = ["."]`, so the `bijuty` package is importable without install):
+Install the package with its test dependencies, then run everything from the
+repository root:
 
 ```bash
+pip install -e ".[test]"
+
 # Full suite
 pytest
 
@@ -79,7 +81,7 @@ pytest -v
 pytest -x
 ```
 
-Coverage requires `pytest-cov` (listed in `requirements.txt`):
+Coverage requires `pytest-cov`:
 
 ```bash
 pytest --cov=bijuty --cov-report=term-missing
@@ -89,7 +91,7 @@ pytest --cov=bijuty --cov-report=html   # writes htmlcov/
 Typical result:
 
 ```
-307 passed, 97 warnings in ~2s
+312 passed, 97 warnings in ~2s
 ```
 
 (The warnings come from the package's own `ipywidgets`/`traitlets` usage and
@@ -106,24 +108,24 @@ tests/
 ├── test_notebooks.py                 # structural validation of example/*.ipynb
 ├── unit/
 │   ├── test_package.py               # top-level bijuty package API
-│   ├── test_utils.py                 # bijuty/utils.py
-│   ├── test_templates.py             # bijuty/templates.py
-│   ├── test_slurm_utils.py           # bijuty/slurm_utils.py
-│   ├── test_big_data_manager.py      # bijuty/big_data_manager.py
-│   ├── test_config.py                # bijuty/gui/config.py
-│   ├── test_widgets.py               # bijuty/gui/widgets.py
-│   ├── test_html.py                  # bijuty/gui/html.py
-│   ├── test_env_setup.py             # bijuty/gui/env_setup.py
-│   ├── test_process_monitor.py       # bijuty/monitoring/process.py
-│   ├── test_spark_monitor.py         # bijuty/monitoring/spark.py
-│   ├── test_flink_monitor.py         # bijuty/monitoring/flink.py
-│   ├── test_pika.py                  # bijuty/monitoring/pika.py
-│   └── test_dashboard.py             # bijuty/monitoring/dashboard.py
+│   ├── test_utils.py                 # src/bijuty/utils.py
+│   ├── test_templates.py             # src/bijuty/templates.py
+│   ├── test_slurm_utils.py           # src/bijuty/slurm_utils.py
+│   ├── test_big_data_manager.py      # src/bijuty/big_data_manager.py
+│   ├── test_config.py                # src/bijuty/gui/config.py
+│   ├── test_widgets.py               # src/bijuty/gui/widgets.py
+│   ├── test_html.py                  # src/bijuty/gui/html.py
+│   ├── test_env_setup.py             # src/bijuty/gui/env_setup.py
+│   ├── test_process_monitor.py       # src/bijuty/monitoring/process.py
+│   ├── test_spark_monitor.py         # src/bijuty/monitoring/spark.py
+│   ├── test_flink_monitor.py         # src/bijuty/monitoring/flink.py
+│   ├── test_pika.py                  # src/bijuty/monitoring/pika.py
+│   └── test_dashboard.py             # src/bijuty/monitoring/dashboard.py
 └── integration/
     └── test_gui_workflow.py          # GUIMain + MultiFrameworkManager
 ```
 
-Mirroring the source tree (`test_<module>.py` for `bijuty/<module>.py`) makes
+Mirroring the source tree (`test_<module>.py` for `src/bijuty/<module>.py`) makes
 it obvious where the tests for a given file live and where new ones belong.
 
 ---
@@ -237,25 +239,25 @@ asserted exactly.
 
 | Test module | Production module | Test functions | Focus |
 | ----------- | ----------------- | --------------: | ----- |
-| `test_package.py` | `bijuty/__init__.py` | 8 | `set_log_level`, exports, log formatter |
-| `test_utils.py` | `bijuty/utils.py` | 14 | subprocess wrapper, file read, port discovery |
-| `test_templates.py` | `bijuty/templates.py` | 15 | factory template discovery, copy, CLI |
-| `test_slurm_utils.py` | `bijuty/slurm_utils.py` | 23 | env parsing, `JobResources`, `SlurmManager` |
-| `test_big_data_manager.py` | `bijuty/big_data_manager.py` | 40 | init, discovery, status, start/stop |
-| `test_config.py` | `bijuty/gui/config.py` | 13 | dataclasses, registry, colour scheme |
-| `test_widgets.py` | `bijuty/gui/widgets.py` | 20 | factory helpers, containers, checkbox |
-| `test_html.py` | `bijuty/gui/html.py` | 10 | HTML/card/viz/ssh/cluster-info generators |
-| `test_env_setup.py` | `bijuty/gui/env_setup.py` | 14 | env builders, conf rewriting, pyflink jar |
-| `test_process_monitor.py` | `bijuty/monitoring/process.py` | 20 | snapshots, collector, monitor |
-| `test_spark_monitor.py` | `bijuty/monitoring/spark.py` | 16 | REST parsing, app-id, conversions |
-| `test_flink_monitor.py` | `bijuty/monitoring/flink.py` | 20 | URL resolution, overview parsing |
-| `test_pika.py` | `bijuty/monitoring/pika.py` | 39 | HTTP client, timeline parsers, monitor |
-| `test_dashboard.py` | `bijuty/monitoring/dashboard.py` | 12 | refresh loop, controls, plot wiring |
+| `test_package.py` | `src/bijuty/__init__.py` | 8 | `set_log_level`, exports, log formatter |
+| `test_utils.py` | `src/bijuty/utils.py` | 14 | subprocess wrapper, file read, port discovery |
+| `test_templates.py` | `src/bijuty/templates.py` | 15 | factory template discovery, copy, CLI |
+| `test_slurm_utils.py` | `src/bijuty/slurm_utils.py` | 28 | env parsing, `JobResources`, `SlurmManager` |
+| `test_big_data_manager.py` | `src/bijuty/big_data_manager.py` | 40 | init, discovery, status, start/stop |
+| `test_config.py` | `src/bijuty/gui/config.py` | 13 | dataclasses, registry, colour scheme |
+| `test_widgets.py` | `src/bijuty/gui/widgets.py` | 20 | factory helpers, containers, checkbox |
+| `test_html.py` | `src/bijuty/gui/html.py` | 10 | HTML/card/viz/ssh/cluster-info generators |
+| `test_env_setup.py` | `src/bijuty/gui/env_setup.py` | 14 | env builders, conf rewriting, pyflink jar |
+| `test_process_monitor.py` | `src/bijuty/monitoring/process.py` | 20 | snapshots, collector, monitor |
+| `test_spark_monitor.py` | `src/bijuty/monitoring/spark.py` | 16 | REST parsing, app-id, conversions |
+| `test_flink_monitor.py` | `src/bijuty/monitoring/flink.py` | 20 | URL resolution, overview parsing |
+| `test_pika.py` | `src/bijuty/monitoring/pika.py` | 39 | HTTP client, timeline parsers, monitor |
+| `test_dashboard.py` | `src/bijuty/monitoring/dashboard.py` | 12 | refresh loop, controls, plot wiring |
 | `test_gui_workflow.py` | GUI orchestration | 26 | headless launch, observers, buttons, tabs |
 | `test_notebooks.py` | `example/*.ipynb` | 4 | nbformat/source/output structure |
 
 "Test functions" counts the distinct test functions per module; `pytest`
-collects more cases where functions are parametrized (307 cases in total).
+collects more cases where functions are parametrized (312 cases in total).
 
 ---
 
@@ -512,9 +514,9 @@ exclude_lines = [
 
 ## Known limitations and surfaced issues
 
-- **`find_first_available_port` signature.** `bijuty/utils.py` defines
+- **`find_first_available_port` signature.** `src/bijuty/utils.py` defines
   `find_first_available_port(start_port=..., end_port=..., host=...)` as a
-  module-level function, and its caller in `bijuty/gui/main.py` passes the
+  module-level function, and its caller in `src/bijuty/gui/main.py` passes the
   selected master host as `host`. The "Randomize Master Port" option now works
   for both Spark and Flink. The tests call the same public signature.
 - **`anywidget` optional in test runs.** Figure-building paths are patched, so
@@ -592,7 +594,7 @@ A minimal CI job (assuming a Linux runner with the project dependencies):
 
 ```yaml
 - name: Install
-  run: pip install -r requirements.txt
+  run: pip install -e ".[test]"
 
 - name: Run tests
   run: pytest -m "not integration"
@@ -601,5 +603,4 @@ A minimal CI job (assuming a Linux runner with the project dependencies):
   run: pytest --cov=bijuty --cov-report=xml --cov-report=term-missing
 ```
 
-`pytest-cov` and `pytest` are already declared in `requirements.txt` under
-"Development and testing dependencies".
+`pytest` and `pytest-cov` are provided by the `test` extra.
